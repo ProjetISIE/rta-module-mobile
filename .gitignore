@@ -1,0 +1,6 @@
+.direnv/
+build/
+.cache/
+*.log
+managed_components/
+libraries/
