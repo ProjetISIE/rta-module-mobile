@@ -32,6 +32,11 @@ int ble_server_register_services(const struct ble_gatt_svc_def *svcs);
  */
 int ble_server_start(void);
 
+/**
+ * @brief Start advertising.
+ */
+void ble_app_advertise(void);
+
 #ifdef __cplusplus
 }
 #endif

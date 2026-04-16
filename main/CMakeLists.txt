@@ -4,6 +4,8 @@ idf_component_register(
   "ble_server.c"
   "GpsService.cpp"
   "gps_gatt_def.c"
+  "active_look.cpp"
+  "ble_manager.cpp"
   INCLUDE_DIRS
   "../include"
   REQUIRES
@@ -12,3 +14,4 @@ idf_component_register(
   esp_driver_uart
   log
   freertos)
+
