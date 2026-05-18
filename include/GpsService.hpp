@@ -11,12 +11,12 @@ namespace rta {
  * @brief Structure representing the GPS status.
  */
 struct GpsStatus {
-  double latitude{0.0};
-  double longitude{0.0};
-  float speedKmh{0.0f};
-  double odometerKm{0.0};
-  int satellites{0};
-  bool fix{false};
+    double latitude{0.0};
+    double longitude{0.0};
+    float speedKmh{0.0f};
+    double odometerKm{0.0};
+    int satellites{0};
+    bool fix{false};
 };
 
 /**
@@ -25,32 +25,32 @@ struct GpsStatus {
  * Follows the Singleton pattern for global access within the application.
  */
 class GpsService {
-public:
-  static GpsService &instance() {
-    static GpsService inst;
-    return inst;
-  }
+  public:
+    static GpsService& instance() {
+        static GpsService inst;
+        return inst;
+    }
 
-  /// Starts the UART reader task.
-  void start();
+    /// Starts the UART reader task.
+    void start();
 
-  /// Retrieves a copy of the current status (Thread-safe).
-  [[nodiscard]] GpsStatus getStatus() const noexcept;
+    /// Retrieves a copy of the current status (Thread-safe).
+    [[nodiscard]] GpsStatus getStatus() const noexcept;
 
-  /// Processes a raw NMEA sentence.
-  void processNmeaSentence(std::string_view sentence);
+    /// Processes a raw NMEA sentence.
+    void processNmeaSentence(std::string_view sentence);
 
-private:
-  GpsService() = default;
+  private:
+    GpsService() = default;
 
-  static void readerTask(void *arg);
+    static void readerTask(void* arg);
 
-  mutable std::mutex mutex_;
-  GpsStatus status_{};
+    mutable std::mutex mutex_;
+    GpsStatus status_{};
 
-  double lastLat_{0.0};
-  double lastLon_{0.0};
-  bool firstFix_{true};
+    double lastLat_{0.0};
+    double lastLon_{0.0};
+    bool firstFix_{true};
 };
 
 } // namespace rta

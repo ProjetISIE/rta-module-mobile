@@ -1,0 +1,14 @@
+---
+BasedOnStyle: LLVM # Style used in Clang…
+IndentWidth: 4     # Discourages too much nesting
+---
+Language: Cpp # C++ specific rules
+AllowShortBlocksOnASingleLine: Empty # Compact code
+AllowShortCaseExpressionOnASingleLine: true # Compact code
+AllowShortCaseLabelsOnASingleLine: true # Compact code
+AllowShortIfStatementsOnASingleLine: AllIfsAndElse # Compact code
+AllowShortLoopsOnASingleLine: true # Compact code
+DerivePointerAlignment: false # Pointer is a type !
+PointerAlignment: Left # Pointer is a type !
+...
+

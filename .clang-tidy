@@ -1,0 +1,35 @@
+---
+Checks: >
+  bugprone-*,
+  cert-*,
+  cppcoreguidelines-*,
+  google-*,
+  hicpp-*,
+  modernize-*,
+  performance-*,
+  readability-*,
+  portability-*,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -cppcoreguidelines-pro-type-reinterpret-cast,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -readability-magic-numbers,
+  -hicpp-no-assembler,
+  -google-readability-todo,
+  -modernize-use-trailing-return-type,
+  -cppcoreguidelines-pro-type-static-cast-downcast,
+  -readability-isolate-declaration
+
+WarningsAsErrors: ""
+HeaderFilterRegex: '^(main/|include/).*'
+CheckOptions:
+  - key:             readability-identifier-naming.ClassCase
+    value:           CamelCase
+  - key:             readability-identifier-naming.FunctionCase
+    value:           camelBack
+  - key:             readability-identifier-naming.VariableCase
+    value:           camelBack
+  - key:             readability-identifier-naming.MemberCase
+    value:           camelBack
+  - key:             readability-identifier-naming.MemberSuffix
+    value:           _
+...

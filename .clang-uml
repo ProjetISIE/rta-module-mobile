@@ -1,0 +1,8 @@
+compilation_database_dir: build
+output_directory: diagrams
+diagrams:
+  engine:
+    type: class
+    glob:
+      - include/*.hpp
+      - src/*.cpp
