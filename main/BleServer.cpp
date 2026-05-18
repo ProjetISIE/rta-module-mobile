@@ -9,7 +9,7 @@
 namespace rta {
 
 namespace {
-constexpr std::string_view TAG = "RTA_BLE_SERVER";
+constexpr std::string_view tag = "RTA_BLE_SERVER";
 }
 
 BleServer* BleServer::instance_ = nullptr;
@@ -31,8 +31,8 @@ int BleServer::init() noexcept {
 }
 
 int BleServer::registerServices(const struct ble_gatt_svc_def* svcs) noexcept {
-    if (const int rc = ble_gatts_count_cfg(svcs); rc != 0) {
-        return rc;
+    if (const int returnCode = ble_gatts_count_cfg(svcs); returnCode != 0) {
+        return returnCode;
     }
     return ble_gatts_add_svcs(svcs);
 }
@@ -51,43 +51,45 @@ void BleServer::startAdvertising() {
     fields.name_len = static_cast<uint8_t>(deviceName_.length());
     fields.name_is_complete = 1;
 
-    if (int rc = ble_gap_adv_set_fields(&fields); rc != 0) {
-        ESP_LOGE(TAG.data(), "Error setting adv fields; rc=%d", rc);
+    if (const int returnCode = ble_gap_adv_set_fields(&fields);
+        returnCode != 0) {
+        ESP_LOGE(tag.data(), "Error setting adv fields; rc=%d", returnCode);
         return;
     }
 
     adv_params.conn_mode = BLE_GAP_CONN_MODE_UND;
     adv_params.disc_mode = BLE_GAP_DISC_MODE_GEN;
 
-    if (int rc =
+    if (const int returnCode =
             ble_gap_adv_start(BLE_OWN_ADDR_PUBLIC, nullptr, BLE_HS_FOREVER,
                               &adv_params, BleServer::gapEventCallback, this);
-        rc != 0) {
-        ESP_LOGE(TAG.data(), "Error starting advertising; rc=%d", rc);
+        returnCode != 0) {
+        ESP_LOGE(tag.data(), "Error starting advertising; rc=%d", returnCode);
         return;
     }
-    ESP_LOGI(TAG.data(), "BLE Advertising started: %s", deviceName_.c_str());
+    ESP_LOGI(tag.data(), "BLE Advertising started: %s", deviceName_.c_str());
 }
 
 int BleServer::gapEventCallback(struct ble_gap_event* event, void* arg) {
     auto* server = static_cast<BleServer*>(arg);
     switch (event->type) {
     case BLE_GAP_EVENT_CONNECT:
-        ESP_LOGI(TAG.data(), "BLE Connection %s",
+        ESP_LOGI(tag.data(), "BLE Connection %s",
                  event->connect.status == 0 ? "established" : "failed");
         break;
 
     case BLE_GAP_EVENT_DISCONNECT:
-        ESP_LOGI(TAG.data(), "BLE Disconnection; reason=%d",
+        ESP_LOGI(tag.data(), "BLE Disconnection; reason=%d",
                  event->disconnect.reason);
         server->startAdvertising();
         break;
+    default: break;
     }
     return 0;
 }
 
 void BleServer::hostTask(void* arg) {
-    ESP_LOGI(TAG.data(), "BLE Host Task started");
+    ESP_LOGI(tag.data(), "BLE Host Task started");
     nimble_port_run();
     nimble_port_freertos_deinit();
 }
