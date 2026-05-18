@@ -3,147 +3,140 @@
 #include "BleServer.hpp"
 #include "GpsService.hpp"
 #include "esp_log.h"
-#include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "host/ble_hs.h"
-#include "nvs_flash.h"
+#include "host/ble_gatt.h" // For ble_gatt_svc_def
+#include <cstdio>
 #include <memory>
 #include <print>
-#include <string_view>
 
 namespace {
-constexpr std::string_view tag = "RTA";
+constexpr const char* tag = "RTA";
 
-struct AppContext {
-    rta::ActiveLook glasses;
-    rta::BleServer server;
-    rta::BleManager manager;
+class AppContext {
+  public:
+    AppContext() : server_("ESP32_RTA"), manager_(glasses_) {}
 
-    AppContext() : server("ESP32_RTA"), manager(glasses) {}
+    rta::ActiveLook& glasses() { return glasses_; }
+    rta::BleServer& server() { return server_; }
+    rta::BleManager& manager() { return manager_; }
+
+  private:
+    rta::ActiveLook glasses_;
+    rta::BleServer server_;
+    rta::BleManager manager_;
+};
+
+struct DisplayState {
+    bool wasConnected_{false};
+    bool lastFix_{false};
+    double lastLat_{0.0};
+    double lastLon_{0.0};
+    bool forceUpdate_{false};
+    int rtaOkTimer_{0};
 };
 
 // GATT services defined in gps_gatt_def.cpp
-extern "C" struct ble_gatt_svc_def gps_gatt_svcs[];
+extern "C" struct ble_gatt_svc_def gpsGattSvcs[];
 
 void updateGlassesDisplay(AppContext& context, const rta::GpsStatus& status,
-                          bool& wasConnected, bool& lastFix, double& lastLat,
-                          double& lastLon, bool& forceUpdate, int& rtaOkTimer) {
-    const bool connected = context.glasses.isConnected();
+                          DisplayState& state) {
+    const bool connected = context.glasses().isConnected();
 
     if (connected) {
-        if (!wasConnected) {
-            rtaOkTimer = 5;
-            wasConnected = true;
-            forceUpdate = true;
+        if (!state.wasConnected_) {
+            state.rtaOkTimer_ = 5;
+            state.wasConnected_ = true;
+            state.forceUpdate_ = true;
         }
 
-        if (rtaOkTimer > 0) {
-            rtaOkTimer--;
+        if (state.rtaOkTimer_ > 0) {
+            state.rtaOkTimer_--;
         } else {
-            const bool fixChanged = (status.fix != lastFix);
-            const bool posChanged = status.fix && (status.latitude != lastLat ||
-                                                   status.longitude != lastLon);
+            const bool fixChanged = (status.fix_ != state.lastFix_);
+            const bool posChanged =
+                status.fix_ && (status.latitude_ != state.lastLat_ ||
+                                status.longitude_ != state.lastLon_);
 
-            if (forceUpdate || fixChanged || posChanged) {
-                if (status.fix) {
-                    context.glasses.displayCoordinates(status.latitude,
-                                                       status.longitude);
-                    lastLat = status.latitude;
-                    lastLon = status.longitude;
+            if (state.forceUpdate_ || fixChanged || posChanged) {
+                if (status.fix_) {
+                    context.glasses().displayCoordinates(status.latitude_,
+                                                         status.longitude_);
+                    state.lastLat_ = status.latitude_;
+                    state.lastLon_ = status.longitude_;
                 } else {
-                    context.glasses.displayGpsWait();
+                    context.glasses().displayGpsWait();
                 }
-                lastFix = status.fix;
-                forceUpdate = false;
+                state.lastFix_ = status.fix_;
+                state.forceUpdate_ = false;
             }
         }
     } else {
-        wasConnected = false;
-        rtaOkTimer = 0;
-        lastFix = false;
-        forceUpdate = false;
+        state.wasConnected_ = false;
+        state.rtaOkTimer_ = 0;
+        state.lastFix_ = false;
+        state.forceUpdate_ = false;
     }
 }
 
 void processAndDisplayTask(void* pvParameters) {
     auto* context = static_cast<AppContext*>(pvParameters);
     auto& gps = rta::GpsService::instance();
-
-    int rtaOkTimer = 0;
-    bool wasConnected = false;
-    bool lastFix = false;
-    double lastLat = 0.0;
-    double lastLon = 0.0;
-    bool forceUpdate = false;
+    DisplayState state;
 
     while (true) {
         const auto status = gps.getStatus();
 
-        updateGlassesDisplay(*context, status, wasConnected, lastFix, lastLat,
-                             lastLon, forceUpdate, rtaOkTimer);
+        updateGlassesDisplay(*context, status, state);
 
         // Formatted console output via std::print (C++23)
-        if (status.fix) {
+        if (status.fix_) {
             std::print(
                 "\r[FIX OK] Sat: {:2d} | Speed: {:6.2f} km/h | L: {:9.6f}, "
                 "{:9.6f}   ",
-                status.satellites, status.speedKmh, status.latitude,
-                status.longitude);
+                status.satellites_, status.speedKmh_, status.latitude_,
+                status.longitude_);
         } else {
             std::print("\r[WAITING] No fix data parsed yet...          ");
         }
-        std::fflush(stdout);
+        (void)std::fflush(stdout);
 
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
 } // namespace
 
+// NOLINTNEXTLINE(readability-identifier-naming)
 extern "C" void app_main() {
-    ESP_LOGI(tag.data(),
-             "Starting Modern C++ GPS BLE Server & ActiveLook Client");
+    static auto context = std::make_unique<AppContext>();
 
-    // Initialize NVS
-    esp_err_t returnCode = nvs_flash_init();
-    if (returnCode == ESP_ERR_NVS_NO_FREE_PAGES ||
-        returnCode == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        returnCode = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK(returnCode);
-
-    // App Context stays alive for the duration of the app
-    static AppContext context;
-
-    // Initialize BLE Server
-    if (context.server.init() != 0) {
-        ESP_LOGE(tag.data(), "Failed to initialize BLE server");
+    // Initialisation du serveur BLE
+    if (context->server().init() != 0) {
+        ESP_LOGE(tag, "Failed to initialize BLE server");
         return;
     }
 
     // Set sync callback to start both advertising and scanning
-    context.server.setSyncCallback([]() {
-        context.server.startAdvertising();
-        context.manager.startScanning();
-        ESP_LOGI(tag.data(),
-                 "BLE synchronized: Advertising and Scanning started");
+    context->server().setSyncCallback([]() {
+        context->server().startAdvertising();
+        context->manager().startScanning();
+        ESP_LOGI(tag, "BLE synchronized: Advertising and Scanning started");
     });
 
     // Start GPS Service
     rta::GpsService::instance().start();
 
     // Register services and start BLE stack
-    if (context.server.registerServices(gps_gatt_svcs) != 0) {
-        ESP_LOGE(tag.data(), "Failed to register BLE services");
+    if (context->server().registerServices(gpsGattSvcs) != 0) {
+        ESP_LOGE(tag, "Failed to register BLE services");
         return;
     }
 
-    if (context.server.start() != 0) {
-        ESP_LOGE(tag.data(), "Failed to start BLE stack");
+    if (context->server().start() != 0) {
+        ESP_LOGE(tag, "Failed to start BLE stack");
         return;
     }
 
     // Create display task
-    xTaskCreate(processAndDisplayTask, "display_task", 4096, &context, 5,
+    xTaskCreate(processAndDisplayTask, "display_task", 4096, context.get(), 5,
                 nullptr);
 }

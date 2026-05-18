@@ -56,7 +56,7 @@ double convertPositionToDecimal(nmea_position pos) {
 }
 } // namespace
 
-extern "C" uint16_t gatt_svr_chr_spd_val_handle;
+extern "C" uint16_t gattSvrChrSpdValHandle;
 
 GpsStatus GpsService::getStatus() const noexcept {
     std::scoped_lock lock(mutex_);
@@ -79,36 +79,36 @@ void GpsService::processNmeaSentence(std::string_view sentence) {
         if (data->type == NMEA_GPRMC) {
             auto* rmc = reinterpret_cast<nmea_gprmc_s*>(data);
             if (rmc->valid) {
-                status_.fix = true;
-                status_.latitude = convertPositionToDecimal(rmc->latitude);
-                status_.longitude = convertPositionToDecimal(rmc->longitude);
-                status_.speedKmh = rmc->gndspd_knots * 1.852F;
+                status_.fix_ = true;
+                status_.latitude_ = convertPositionToDecimal(rmc->latitude);
+                status_.longitude_ = convertPositionToDecimal(rmc->longitude);
+                status_.speedKmh_ = rmc->gndspd_knots * 1.852F;
 
                 if (firstFix_) {
-                    lastLat_ = status_.latitude;
-                    lastLon_ = status_.longitude;
+                    lastLat_ = status_.latitude_;
+                    lastLon_ = status_.longitude_;
                     firstFix_ = false;
-                } else if (status_.speedKmh > minSpeedKmhThreshold) {
+                } else if (status_.speedKmh_ > minSpeedKmhThreshold) {
                     const auto distance =
-                        calculateDistance(lastLat_, lastLon_, status_.latitude,
-                                          status_.longitude);
+                        calculateDistance(lastLat_, lastLon_, status_.latitude_,
+                                          status_.longitude_);
                     if (distance > minOdometerAccuracyKm) {
-                        status_.odometerKm += distance;
-                        lastLat_ = status_.latitude;
-                        lastLon_ = status_.longitude;
+                        status_.odometerKm_ += distance;
+                        lastLat_ = status_.latitude_;
+                        lastLon_ = status_.longitude_;
                     }
                 }
-                ble_gatts_chr_updated(gatt_svr_chr_spd_val_handle);
+                ble_gatts_chr_updated(gattSvrChrSpdValHandle);
             } else {
-                status_.fix = false;
+                status_.fix_ = false;
             }
         } else if (data->type == NMEA_GPGGA) {
             auto* gga = reinterpret_cast<nmea_gpgga_s*>(data);
             if (gga->position_fix > 0) {
-                status_.fix = true;
-                status_.satellites = gga->n_satellites;
+                status_.fix_ = true;
+                status_.satellites_ = gga->n_satellites;
             } else {
-                status_.fix = false;
+                status_.fix_ = false;
             }
         }
     }

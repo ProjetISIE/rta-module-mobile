@@ -12,12 +12,12 @@ namespace rta {
  * @brief Structure representing the GPS status.
  */
 struct GpsStatus {
-    double latitude{0.0};
-    double longitude{0.0};
-    float speedKmh{0.0F};
-    double odometerKm{0.0};
-    int satellites{0};
-    bool fix{false};
+    double latitude_{0.0};
+    double longitude_{0.0};
+    float speedKmh_{0.0F};
+    double odometerKm_{0.0};
+    int satellites_{0};
+    bool fix_{false};
 };
 /**
  * @brief Service for GPS management and NMEA sentence processing.
