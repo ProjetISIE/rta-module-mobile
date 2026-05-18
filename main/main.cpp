@@ -36,6 +36,9 @@ void process_and_display_task(void *arg) {
   auto &gps = rta::GpsService::instance();
   int rta_ok_timer = 0;
   bool was_connected = false;
+  bool last_fix = false;
+  double last_lat = 0, last_lon = 0;
+  bool force_update = false;
 
   while (true) {
     bool connected = myGlasses.isConnected();
@@ -43,26 +46,37 @@ void process_and_display_task(void *arg) {
 
     if (connected) {
       if (!was_connected) {
-        // Nouvelle connexion : le timer commence (displayHello a déjà affiché
-        // "RTA OK")
         rta_ok_timer = 5;
         was_connected = true;
+        force_update = true;
       }
 
       if (rta_ok_timer > 0) {
-        // Pendant les 5 premières secondes, on ne change rien (on laisse RTA
-        // OK)
         rta_ok_timer--;
       } else {
-        if (status.fix) {
-          myGlasses.displayCoordinates(status.latitude, status.longitude);
-        } else {
-          myGlasses.displayGpsWait();
+        bool fix_changed = (status.fix != last_fix);
+        // On considère que la position a changé si on a un fix et que les
+        // coordonnées bougent
+        bool pos_changed = status.fix && (status.latitude != last_lat ||
+                                          status.longitude != last_lon);
+
+        if (force_update || fix_changed || pos_changed) {
+          if (status.fix) {
+            myGlasses.displayCoordinates(status.latitude, status.longitude);
+            last_lat = status.latitude;
+            last_lon = status.longitude;
+          } else {
+            myGlasses.displayGpsWait();
+          }
+          last_fix = status.fix;
+          force_update = false;
         }
       }
     } else {
       was_connected = false;
       rta_ok_timer = 0;
+      last_fix = false;
+      force_update = false;
     }
 
     // Affichage local toujours actif pour le debug

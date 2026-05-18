@@ -30,6 +30,9 @@ public:
   // Vérifie si les lunettes sont connectées
   bool isConnected() const { return connection_handle != 0xFFFF; }
 
+  // Réinitialise l'état de connexion
+  void disconnect() { connection_handle = 0xFFFF; }
+
   // Affiche un message d'attente
   void displayGpsWait();
 

@@ -86,11 +86,13 @@ void ActiveLook::displayCoordinates(double lat, double lon) {
   sendCommand(0x01); // Efface l'écran
   vTaskDelay(pdMS_TO_TICKS(50));
 
+  char raw[32];
   char buffer[16];
 
   // Affichage Latitude (Ligne 1) - Cropped to 6 chars total
-  snprintf(buffer, 7, "%-6.6s", std::to_string(lat).c_str());
-  uint8_t txtLat[64] = {0x00, 0x10, 0x00, 0x40, 0x00, 0x02, 0x0F};
+  snprintf(raw, sizeof(raw), "%.4f", lat);
+  snprintf(buffer, 7, "%-6.6s", raw);
+  uint8_t txtLat[64] = {0x00, 0x99, 0x00, 0x40, 0x04, 0x02, 0x0F};
   size_t lenLat = strlen(buffer);
   memcpy(&txtLat[7], buffer, lenLat);
   txtLat[7 + lenLat] = '\0';
@@ -99,8 +101,9 @@ void ActiveLook::displayCoordinates(double lat, double lon) {
   vTaskDelay(pdMS_TO_TICKS(50));
 
   // Affichage Longitude (Ligne 2) - Cropped to 6 chars total
-  snprintf(buffer, 7, "%-6.6s", std::to_string(lon).c_str());
-  uint8_t txtLon[64] = {0x00, 0x10, 0x00, 0x80, 0x00, 0x02, 0x0F};
+  snprintf(raw, sizeof(raw), "%.4f", lon);
+  snprintf(buffer, 7, "%-6.6s", raw);
+  uint8_t txtLon[64] = {0x00, 0x99, 0x00, 0x80, 0x04, 0x02, 0x0F};
   size_t lenLon = strlen(buffer);
   memcpy(&txtLon[7], buffer, lenLon);
   txtLon[7 + lenLon] = '\0';
