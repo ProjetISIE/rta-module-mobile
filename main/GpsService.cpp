@@ -3,6 +3,7 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "host/ble_hs.h"
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -14,9 +15,6 @@
 #include "gprmc.h"
 #include "nmea.h"
 
-// NimBLE headers
-#include "host/ble_hs.h"
-
 namespace rta {
 
 namespace {
@@ -24,13 +22,13 @@ constexpr double EARTH_RADIUS_KM = 6371.0;
 constexpr double MIN_ODOMETER_ACCURACY_KM = 0.001;
 constexpr float MIN_SPEED_KMH_THRESHOLD = 0.5f;
 
-// Configuration UART
+// UART Config
 constexpr uart_port_t GPS_UART_PORT = UART_NUM_2;
 constexpr int GPS_RX_PIN = 16;
 constexpr int GPS_TX_PIN = 17;
 constexpr int UART_BUF_SIZE = 1024;
 
-// Commandes PMTK
+// PMTK Commands
 constexpr std::string_view PMTK_SET_BAUD_115200 = "$PMTK251,115200*1F\r\n";
 constexpr std::string_view PMTK_SET_NMEA_OUTPUT_RMCGGA =
     "$PMTK314,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0*28\r\n";
@@ -49,11 +47,11 @@ double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
 }
 
 double convertPositionToDecimal(nmea_position pos) {
-  auto decimal_degrees = pos.degrees + (pos.minutes / 60.0);
+  auto decimalDegrees = pos.degrees + (pos.minutes / 60.0);
   if (pos.cardinal == 'S' || pos.cardinal == 'W') {
-    decimal_degrees = -decimal_degrees;
+    decimalDegrees = -decimalDegrees;
   }
-  return decimal_degrees;
+  return decimalDegrees;
 }
 } // namespace
 
@@ -65,10 +63,9 @@ GpsStatus GpsService::getStatus() const {
 }
 
 void GpsService::processNmeaSentence(std::string_view sentence) {
-  // libnmea nécessite un char* mutable
-  std::vector<char> mutable_sentence(sentence.begin(), sentence.end());
-  nmea_s *data =
-      nmea_parse(mutable_sentence.data(), mutable_sentence.size(), 1);
+  // libnmea requires a mutable char*
+  std::vector<char> mutableSentence(sentence.begin(), sentence.end());
+  nmea_s *data = nmea_parse(mutableSentence.data(), mutableSentence.size(), 1);
   if (!data)
     return;
 
@@ -80,19 +77,19 @@ void GpsService::processNmeaSentence(std::string_view sentence) {
         status_.fix = true;
         status_.latitude = convertPositionToDecimal(rmc->latitude);
         status_.longitude = convertPositionToDecimal(rmc->longitude);
-        status_.speed_kmh = rmc->gndspd_knots * 1.852f;
+        status_.speedKmh = rmc->gndspd_knots * 1.852f;
 
-        if (first_fix_) {
-          last_lat_ = status_.latitude;
-          last_lon_ = status_.longitude;
-          first_fix_ = false;
-        } else if (status_.speed_kmh > MIN_SPEED_KMH_THRESHOLD) {
-          auto dist = calculateDistance(last_lat_, last_lon_, status_.latitude,
+        if (firstFix_) {
+          lastLat_ = status_.latitude;
+          lastLon_ = status_.longitude;
+          firstFix_ = false;
+        } else if (status_.speedKmh > MIN_SPEED_KMH_THRESHOLD) {
+          auto dist = calculateDistance(lastLat_, lastLon_, status_.latitude,
                                         status_.longitude);
           if (dist > MIN_ODOMETER_ACCURACY_KM) {
-            status_.odometer_km += dist;
-            last_lat_ = status_.latitude;
-            last_lon_ = status_.longitude;
+            status_.odometerKm += dist;
+            lastLat_ = status_.latitude;
+            lastLon_ = status_.longitude;
           }
         }
         ble_gatts_chr_updated(gatt_svr_chr_spd_val_handle);
@@ -112,21 +109,21 @@ void GpsService::processNmeaSentence(std::string_view sentence) {
   nmea_free(data);
 }
 
-static void reader_task(void *) {
+void GpsService::readerTask(void *) {
   auto &service = GpsService::instance();
 
-  uart_config_t uart_config = {.baud_rate = 9600,
-                               .data_bits = UART_DATA_8_BITS,
-                               .parity = UART_PARITY_DISABLE,
-                               .stop_bits = UART_STOP_BITS_1,
-                               .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
-                               .rx_flow_ctrl_thresh = 0,
-                               .source_clk = UART_SCLK_DEFAULT,
-                               .flags = {}};
+  uart_config_t uartConfig = {.baud_rate = 9600,
+                              .data_bits = UART_DATA_8_BITS,
+                              .parity = UART_PARITY_DISABLE,
+                              .stop_bits = UART_STOP_BITS_1,
+                              .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+                              .rx_flow_ctrl_thresh = 0,
+                              .source_clk = UART_SCLK_DEFAULT,
+                              .flags = {}};
 
   ESP_ERROR_CHECK(
       uart_driver_install(GPS_UART_PORT, UART_BUF_SIZE * 2, 0, 0, nullptr, 0));
-  ESP_ERROR_CHECK(uart_param_config(GPS_UART_PORT, &uart_config));
+  ESP_ERROR_CHECK(uart_param_config(GPS_UART_PORT, &uartConfig));
   ESP_ERROR_CHECK(uart_set_pin(GPS_UART_PORT, GPS_TX_PIN, GPS_RX_PIN,
                                UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
 
@@ -143,46 +140,46 @@ static void reader_task(void *) {
                    PMTK_SET_NMEA_UPDATE_5HZ.size());
 
   std::vector<uint8_t> buffer(UART_BUF_SIZE);
-  size_t total_bytes = 0;
+  size_t totalBytes = 0;
 
   while (true) {
-    int len = uart_read_bytes(GPS_UART_PORT, buffer.data() + total_bytes,
-                              buffer.size() - total_bytes, pdMS_TO_TICKS(100));
+    int len = uart_read_bytes(GPS_UART_PORT, buffer.data() + totalBytes,
+                              buffer.size() - totalBytes, pdMS_TO_TICKS(100));
     if (len > 0) {
-      total_bytes += len;
+      totalBytes += len;
 
-      size_t consumed_up_to = 0;
-      while (consumed_up_to < total_bytes) {
-        auto *current_ptr = buffer.data() + consumed_up_to;
-        auto *end_ptr = buffer.data() + total_bytes;
+      size_t consumedUpTo = 0;
+      while (consumedUpTo < totalBytes) {
+        auto *currentPtr = buffer.data() + consumedUpTo;
+        auto *endPtr = buffer.data() + totalBytes;
 
-        auto *sentence_start = std::find(current_ptr, end_ptr, '$');
-        if (sentence_start == end_ptr) {
-          total_bytes = 0;
+        auto *sentenceStart = std::find(currentPtr, endPtr, '$');
+        if (sentenceStart == endPtr) {
+          totalBytes = 0;
           break;
         }
 
-        auto *sentence_end = std::find(sentence_start, end_ptr, '\r');
-        if (sentence_end == end_ptr || (sentence_end + 1 == end_ptr) ||
-            *(sentence_end + 1) != '\n') {
-          // Trame incomplète, on décale les données restantes au début
-          size_t remaining = end_ptr - sentence_start;
-          std::memmove(buffer.data(), sentence_start, remaining);
-          total_bytes = remaining;
-          consumed_up_to = total_bytes; // Pour sortir de la boucle
+        auto *sentenceEnd = std::find(sentenceStart, endPtr, '\r');
+        if (sentenceEnd == endPtr || (sentenceEnd + 1 == endPtr) ||
+            *(sentenceEnd + 1) != '\n') {
+          // Incomplete frame, shift remaining data to start
+          size_t remaining = endPtr - sentenceStart;
+          std::memmove(buffer.data(), sentenceStart, remaining);
+          totalBytes = remaining;
+          consumedUpTo = totalBytes;
           break;
         }
 
-        // Trame complète trouvée
-        size_t sentence_len = (sentence_end + 2) - sentence_start;
-        if (sentence_len <= NMEA_MAX_LENGTH) {
+        // Complete frame found
+        size_t sentenceLen = (sentenceEnd + 2) - sentenceStart;
+        if (sentenceLen <= NMEA_MAX_LENGTH) {
           service.processNmeaSentence(std::string_view(
-              reinterpret_cast<const char *>(sentence_start), sentence_len));
+              reinterpret_cast<const char *>(sentenceStart), sentenceLen));
         }
-        consumed_up_to = (sentence_end + 2) - buffer.data();
+        consumedUpTo = (sentenceEnd + 2) - buffer.data();
 
-        if (consumed_up_to == total_bytes) {
-          total_bytes = 0;
+        if (consumedUpTo == totalBytes) {
+          totalBytes = 0;
         }
       }
     }
@@ -190,11 +187,7 @@ static void reader_task(void *) {
 }
 
 void GpsService::start() {
-  xTaskCreate(reader_task, "gps_reader_task", 4096, nullptr, 5, nullptr);
+  xTaskCreate(readerTask, "gps_reader_task", 4096, nullptr, 5, nullptr);
 }
 
 } // namespace rta
-
-extern "C" float gps_service_get_speed() {
-  return rta::GpsService::instance().getStatus().speed_kmh;
-}

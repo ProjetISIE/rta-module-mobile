@@ -1,21 +1,33 @@
-#include "ble_manager.hpp"
-#include "active_look.hpp"
+#include "BleManager.hpp"
+#include "ActiveLook.hpp"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "host/ble_hs.h"
-#include "nimble/nimble_port.h"
-#include "nimble/nimble_port_freertos.h"
-#include "services/gap/ble_svc_gap.h"
 #include <cstring>
 #include <string_view>
 
-static constexpr std::string_view TAG = "BLE_MANAGER";
+namespace rta {
 
-// Instance globale définie dans main.cpp
-extern ActiveLook myGlasses;
+namespace {
+constexpr std::string_view TAG = "RTA_BLE_MANAGER";
+}
 
-extern "C" int ble_manager_gap_event(struct ble_gap_event *event, void *) {
+BleManager *BleManager::instance_ = nullptr;
+
+BleManager::BleManager(ActiveLook &glasses) : glasses_(glasses) {
+  instance_ = this;
+}
+
+void BleManager::startScanning() {
+  struct ble_gap_disc_params dp{};
+  ble_gap_disc(BLE_OWN_ADDR_PUBLIC, BLE_HS_FOREVER, &dp,
+               BleManager::gapEventCallback, this);
+}
+
+int BleManager::gapEventCallback(struct ble_gap_event *event, void *arg) {
+  auto *manager = static_cast<BleManager *>(arg);
+
   switch (event->type) {
   case BLE_GAP_EVENT_DISC: {
     struct ble_hs_adv_fields fields;
@@ -36,9 +48,9 @@ extern "C" int ble_manager_gap_event(struct ble_gap_event *event, void *) {
         cp.supervision_timeout = 500;
 
         if (ble_gap_connect(BLE_OWN_ADDR_PUBLIC, &event->disc.addr, 30000, &cp,
-                            ble_manager_gap_event, nullptr) != 0) {
+                            BleManager::gapEventCallback, manager) != 0) {
           ESP_LOGE(TAG.data(), "Error connecting");
-          ble_manager_scan_start();
+          manager->startScanning();
         }
       }
     }
@@ -49,28 +61,22 @@ extern "C" int ble_manager_gap_event(struct ble_gap_event *event, void *) {
     if (event->connect.status == 0) {
       ESP_LOGI(TAG.data(), "Connected to glasses");
       vTaskDelay(pdMS_TO_TICKS(1500));
-      myGlasses.initializeDisplay(event->connect.conn_handle);
+      manager->glasses_.initializeDisplay(event->connect.conn_handle);
     } else {
       ESP_LOGE(TAG.data(), "Connection failed; status=%d",
                event->connect.status);
-      ble_manager_scan_start();
+      manager->startScanning();
     }
     break;
 
   case BLE_GAP_EVENT_DISCONNECT:
     ESP_LOGI(TAG.data(), "Disconnected from glasses; reason=%d",
              event->disconnect.reason);
-    myGlasses.disconnect();
-    ble_manager_scan_start();
+    manager->glasses_.disconnect();
+    manager->startScanning();
     break;
   }
   return 0;
 }
 
-void ble_manager_scan_start(void) {
-  struct ble_gap_disc_params dp{};
-  ble_gap_disc(BLE_OWN_ADDR_PUBLIC, BLE_HS_FOREVER, &dp, ble_manager_gap_event,
-               nullptr);
-}
-
-void ble_manager_init() { ble_manager_scan_start(); }
+} // namespace rta

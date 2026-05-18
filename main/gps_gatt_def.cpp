@@ -1,3 +1,4 @@
+#include "GpsService.hpp"
 #include "host/ble_hs.h"
 #include "services/gatt/ble_svc_gatt.h"
 #include <array>
@@ -9,8 +10,6 @@
  */
 
 extern "C" {
-// Pont vers GpsService.cpp
-extern float gps_service_get_speed();
 
 uint16_t gatt_svr_chr_spd_val_handle;
 
@@ -63,7 +62,7 @@ struct ble_gatt_svc_def gps_gatt_svcs[] = {
 static int gatt_svr_chr_access(uint16_t, uint16_t,
                                struct ble_gatt_access_ctxt *ctxt, void *) {
   if (ble_uuid_cmp(ctxt->chr->uuid, &gatt_svr_chr_spd_uuid.u) == 0) {
-    float speed = gps_service_get_speed();
+    float speed = rta::GpsService::instance().getStatus().speedKmh;
     return os_mbuf_append(ctxt->om, &speed, sizeof(speed)) == 0
                ? 0
                : BLE_ATT_ERR_INSUFFICIENT_RES;
