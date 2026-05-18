@@ -37,12 +37,11 @@ void ActiveLook::displayHello(uint16_t conn_h) {
   sendCommand(
       0x03, &vFlip,
       1); // Configuration: Retourne l'écran si nécessaire ou change le mode
-  sendCommand(0x01); // Commande Clear: Efface le contenu de l'écran
 
   // Attente brève (50ms) pour laisser le temps à l'écran de s'initialiser
   vTaskDelay(pdMS_TO_TICKS(50));
 
-  displayText("RTA Connecté"); // Affiche le texte de test initial
+  displayText("RTA OK"); // Affiche le texte de test initial
 }
 
 // [NOUVEAU] Efface l'écran et affiche un nouveau texte

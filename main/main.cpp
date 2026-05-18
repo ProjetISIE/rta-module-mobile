@@ -7,6 +7,7 @@
 #include "freertos/task.h"
 #include "host/ble_hs.h"
 #include "host/util/util.h"
+#include "nvs_flash.h"
 #include <cstdio>
 
 static const char *TAG = "RTA";
@@ -18,7 +19,7 @@ ActiveLook myGlasses;
 extern "C" const struct ble_gatt_svc_def gps_gatt_svcs[];
 
 // Fonction de synchronisation combinée pour le serveur et le client BLE
-void combined_on_sync(void) {
+extern "C" void combined_on_sync(void) {
   int rc = ble_hs_util_ensure_addr(0);
   assert(rc == 0);
 
@@ -33,6 +34,8 @@ void combined_on_sync(void) {
 
 void process_and_display_task(void *arg) {
   auto &gps = rta::GpsService::instance();
+  bool first_search = true;
+
   while (true) {
     auto status = gps.getStatus();
     if (status.fix) {
@@ -46,12 +49,18 @@ void process_and_display_task(void *arg) {
       // Affichage sur les lunettes ActiveLook
       myGlasses.displayGpsData(status.speed_kmh, status.latitude,
                                status.longitude);
+      first_search = true;
     } else {
       std::printf("\r[WAITING] No fix data parsed yet...          ");
       std::fflush(stdout);
 
-      // On peut optionnellement afficher un message sur les lunettes
-      // myGlasses.displayText("Searching GPS...");
+      if (first_search) {
+        // On affiche "RTA OK" (ou Searching GPS) si on n'a pas encore de fix
+        // mais qu'on est connecté. myGlasses.displayText gère déjà le check
+        // connection_handle.
+        myGlasses.displayText("RTA OK");
+        first_search = false;
+      }
     }
     vTaskDelay(pdMS_TO_TICKS(
         1000)); // Mise à jour toutes les secondes pour les lunettes
@@ -60,6 +69,15 @@ void process_and_display_task(void *arg) {
 
 extern "C" void app_main(void) {
   ESP_LOGI(TAG, "Starting Modern C++ GPS BLE Server & ActiveLook Client");
+
+  // 0. Initialize NVS
+  esp_err_t ret = nvs_flash_init();
+  if (ret == ESP_ERR_NVS_NO_FREE_PAGES ||
+      ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+    ESP_ERROR_CHECK(nvs_flash_erase());
+    ret = nvs_flash_init();
+  }
+  ESP_ERROR_CHECK(ret);
 
   // 1. Initialize BLE stack
   if (ble_server_init("ESP32_GPS_MODERN") != 0) {

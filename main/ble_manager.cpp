@@ -12,7 +12,7 @@
 extern ActiveLook myGlasses;
 
 // Fonction de gestion des événements GAP (découverte, connexion, etc.)
-int ble_manager_gap_event(struct ble_gap_event *event, void *arg) {
+extern "C" int ble_manager_gap_event(struct ble_gap_event *event, void *arg) {
 
   // Cas 1 : Nous détectons un appareil Bluetooth pendant notre "scan"
   if (event->type == BLE_GAP_EVENT_DISC) {
