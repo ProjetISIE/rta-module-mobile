@@ -42,10 +42,10 @@ void handleDiscovery(struct ble_gap_event* event, BleManager* manager,
 }
 } // namespace
 
-BleManager* BleManager::instance_ = nullptr;
+BleManager* BleManager::instance = nullptr;
 
 BleManager::BleManager(ActiveLook& glasses) : glasses_(glasses) {
-    instance_ = this;
+    instance = this;
 }
 
 void BleManager::startScanning() noexcept {

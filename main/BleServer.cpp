@@ -12,10 +12,10 @@ namespace {
 constexpr std::string_view tag = "RTA_BLE_SERVER";
 }
 
-BleServer* BleServer::instance_ = nullptr;
+BleServer* BleServer::instance = nullptr;
 
 BleServer::BleServer(std::string_view deviceName) : deviceName_(deviceName) {
-    instance_ = this;
+    instance = this;
 }
 
 int BleServer::init() noexcept {
@@ -94,12 +94,12 @@ void BleServer::hostTask(void* arg) {
     nimble_port_freertos_deinit();
 }
 
-void BleServer::onSync(void) {
+void BleServer::onSync() {
     if (ble_hs_util_ensure_addr(0) == 0) {
-        if (instance_ && instance_->syncCallback_) {
-            instance_->syncCallback_();
-        } else if (instance_) {
-            instance_->startAdvertising();
+        if (instance != nullptr && instance->syncCallback_) {
+            instance->syncCallback_();
+        } else if (instance != nullptr) {
+            instance->startAdvertising();
         }
     }
 }

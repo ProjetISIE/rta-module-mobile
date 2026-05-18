@@ -29,7 +29,7 @@ void ActiveLook::sendCommand(Command cmd, std::span<const uint8_t> payload) {
     }
     buf.push_back(0xAA);
 
-    for (const uint16_t handle : COMMAND_HANDLES) {
+    for (const uint16_t handle : commandHandles) {
         ble_gattc_write_no_rsp_flat(*connectionHandle_, handle, buf.data(),
                                     buf.size());
     }

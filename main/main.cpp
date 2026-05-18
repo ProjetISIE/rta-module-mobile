@@ -104,13 +104,13 @@ extern "C" void app_main() {
              "Starting Modern C++ GPS BLE Server & ActiveLook Client");
 
     // Initialize NVS
-    esp_err_t return_code = nvs_flash_init();
-    if (return_code == ESP_ERR_NVS_NO_FREE_PAGES ||
-        return_code == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+    esp_err_t returnCode = nvs_flash_init();
+    if (returnCode == ESP_ERR_NVS_NO_FREE_PAGES ||
+        returnCode == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_ERROR_CHECK(nvs_flash_erase());
-        return_code = nvs_flash_init();
+        returnCode = nvs_flash_init();
     }
-    ESP_ERROR_CHECK(return_code);
+    ESP_ERROR_CHECK(returnCode);
 
     // App Context stays alive for the duration of the app
     static AppContext context;
@@ -133,8 +133,15 @@ extern "C" void app_main() {
     rta::GpsService::instance().start();
 
     // Register services and start BLE stack
-    context.server.registerServices(gps_gatt_svcs);
-    context.server.start();
+    if (context.server.registerServices(gps_gatt_svcs) != 0) {
+        ESP_LOGE(tag.data(), "Failed to register BLE services");
+        return;
+    }
+
+    if (context.server.start() != 0) {
+        ESP_LOGE(tag.data(), "Failed to start BLE stack");
+        return;
+    }
 
     // Create display task
     xTaskCreate(processAndDisplayTask, "display_task", 4096, &context, 5,

@@ -20,7 +20,7 @@ namespace {
 constexpr std::string_view tag = "RTA_GPS";
 constexpr double earthRadiusKm = 6371.0;
 constexpr double minOdometerAccuracyKm = 0.001;
-constexpr float minSpeedKmhThreshold = 0.5f;
+constexpr float minSpeedKmhThreshold = 0.5F;
 
 // UART Config
 constexpr uart_port_t gpsUartPort = UART_NUM_2;
@@ -82,7 +82,7 @@ void GpsService::processNmeaSentence(std::string_view sentence) {
                 status_.fix = true;
                 status_.latitude = convertPositionToDecimal(rmc->latitude);
                 status_.longitude = convertPositionToDecimal(rmc->longitude);
-                status_.speedKmh = rmc->gndspd_knots * 1.852f;
+                status_.speedKmh = rmc->gndspd_knots * 1.852F;
 
                 if (firstFix_) {
                     lastLat_ = status_.latitude;

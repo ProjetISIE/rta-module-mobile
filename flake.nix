@@ -63,6 +63,7 @@
                   tio # Serial
                   valgrind # Debugging and profiling
                   (pkgs.writeShellScriptBin "setup" "cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -GNinja -B build")
+                  (pkgs.writeShellScriptBin "lint" "clang-tidy -p build main/*.cpp")
                 ];
               };
         }

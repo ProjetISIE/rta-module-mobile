@@ -1,4 +1,5 @@
-#pragma once
+#ifndef RTA_ACTIVE_LOOK_HPP
+#define RTA_ACTIVE_LOOK_HPP
 
 #include <array>
 #include <cstdint>
@@ -15,8 +16,7 @@ namespace rta {
 class ActiveLook {
   public:
     /// Bluetooth characteristic handles used for commands.
-    static constexpr std::array<uint16_t, 3> COMMAND_HANDLES = {35, 56, 32};
-
+    static constexpr std::array<uint16_t, 3> commandHandles = {35, 56, 32};
     /// ActiveLook protocol constants
     enum class Command : uint8_t {
         POWER = 0x00,
@@ -82,3 +82,5 @@ class ActiveLook {
 };
 
 } // namespace rta
+
+#endif // RTA_ACTIVE_LOOK_HPP

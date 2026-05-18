@@ -1,4 +1,5 @@
-#pragma once
+#ifndef RTA_BLE_SERVER_HPP
+#define RTA_BLE_SERVER_HPP
 
 #include "host/ble_hs.h"
 #include <functional>
@@ -14,7 +15,7 @@ class BleServer {
   public:
     using SyncCallback = std::function<void()>;
 
-    BleServer(std::string_view deviceName = "RTA_MOBILE");
+    explicit BleServer(std::string_view deviceName = "RTA_MOBILE");
     ~BleServer() = default;
 
     // Delete copy and move for safety
@@ -51,20 +52,24 @@ class BleServer {
 
     /**
      * @brief Sets the sync callback.
-     * @param cb Callback function.
+     * @param callback Callback function.
      */
-    void setSyncCallback(SyncCallback cb) { syncCallback_ = std::move(cb); }
+    void setSyncCallback(SyncCallback callback) {
+        syncCallback_ = std::move(callback);
+    }
 
   private:
     static int gapEventCallback(struct ble_gap_event* event, void* arg);
     static void hostTask(void* arg);
-    static void onSync(void);
+    static void onSync();
 
     std::string deviceName_;
     SyncCallback syncCallback_;
 
     // Static pointer for NimBLE callbacks
-    static BleServer* instance_;
+    static BleServer* instance;
 };
 
 } // namespace rta
+
+#endif // RTA_BLE_SERVER_HPP

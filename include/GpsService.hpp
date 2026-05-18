@@ -1,4 +1,5 @@
-#pragma once
+#ifndef RTA_GPS_SERVICE_HPP
+#define RTA_GPS_SERVICE_HPP
 
 #include <atomic>
 #include <cstdint>
@@ -13,12 +14,11 @@ namespace rta {
 struct GpsStatus {
     double latitude{0.0};
     double longitude{0.0};
-    float speedKmh{0.0f};
+    float speedKmh{0.0F};
     double odometerKm{0.0};
     int satellites{0};
     bool fix{false};
 };
-
 /**
  * @brief Service for GPS management and NMEA sentence processing.
  *
@@ -54,3 +54,5 @@ class GpsService {
 };
 
 } // namespace rta
+
+#endif // RTA_GPS_SERVICE_HPP
