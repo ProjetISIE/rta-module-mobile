@@ -14,6 +14,7 @@ void ActiveLook::sendCommand(Command cmd, std::span<const uint8_t> payload) {
 
   // Frame construction: [0xFF, CMD, LEN_H, LEN_L, PAYLOAD..., 0xAA]
   const size_t totalLen = 4 + payload.size() + 1;
+
   std::vector<uint8_t> buf;
   buf.reserve(totalLen);
 
@@ -27,7 +28,7 @@ void ActiveLook::sendCommand(Command cmd, std::span<const uint8_t> payload) {
   }
   buf.push_back(0xAA);
 
-  for (uint16_t h : COMMAND_HANDLES) {
+  for (const uint16_t h : COMMAND_HANDLES) {
     ble_gattc_write_no_rsp_flat(*connectionHandle_, h, buf.data(), buf.size());
   }
 }
@@ -36,10 +37,10 @@ void ActiveLook::initializeDisplay(uint16_t connHandle) {
   connectionHandle_ = connHandle;
 
   // Power on and configure display
-  const uint8_t vOn = 0x01;
-  const uint8_t vFlip = 0x02;
-  sendCommand(Command::POWER, std::span(&vOn, 1));
-  sendCommand(Command::CONFIG, std::span(&vFlip, 1));
+  static constexpr uint8_t vOn = 0x01;
+  static constexpr uint8_t vFlip = 0x02;
+  sendCommand(Command::POWER, std::span{&vOn, 1});
+  sendCommand(Command::CONFIG, std::span{&vFlip, 1});
 
   vTaskDelay(pdMS_TO_TICKS(50));
   displayText("RTA OK");
@@ -55,10 +56,9 @@ void ActiveLook::displayText(std::string_view msg) {
   // LumaText config: {X, Y, Rotation, Font, Color}
   std::vector<uint8_t> txt = {0x00, 0x99, 0x00, 0x60, 0x04, 0x02, 0x0F};
 
-  if (msg.length() > 50)
-    msg = msg.substr(0, 50);
+  const auto displayMsg = msg.substr(0, std::min(msg.length(), size_t{50}));
 
-  for (char c : msg)
+  for (const char c : displayMsg)
     txt.push_back(static_cast<uint8_t>(c));
   txt.push_back('\0');
 
@@ -79,12 +79,14 @@ void ActiveLook::displayCoordinates(double lat, double lon) {
   vTaskDelay(pdMS_TO_TICKS(50));
 
   auto formatCoord = [](double val, uint8_t yPos) {
-    std::string s = std::format("{:.4f}", val);
+    auto s = std::format("{:.4f}", val);
     if (s.length() > 6)
-      s = s.substr(0, 6);
+      s.resize(6);
 
     std::vector<uint8_t> payload = {0x00, 0x99, 0x00, yPos, 0x04, 0x02, 0x0F};
-    for (char c : s)
+    payload.reserve(payload.size() + s.length() + 1);
+
+    for (const char c : s)
       payload.push_back(static_cast<uint8_t>(c));
     payload.push_back('\0');
     return payload;

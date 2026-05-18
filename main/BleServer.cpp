@@ -18,7 +18,7 @@ BleServer::BleServer(std::string_view deviceName) : deviceName_(deviceName) {
   instance_ = this;
 }
 
-int BleServer::init() {
+int BleServer::init() noexcept {
   nimble_port_init();
 
   // Configure sync callback
@@ -30,14 +30,14 @@ int BleServer::init() {
   return ble_svc_gap_device_name_set(deviceName_.c_str());
 }
 
-int BleServer::registerServices(const struct ble_gatt_svc_def *svcs) {
-  if (int rc = ble_gatts_count_cfg(svcs); rc != 0) {
+int BleServer::registerServices(const struct ble_gatt_svc_def *svcs) noexcept {
+  if (const int rc = ble_gatts_count_cfg(svcs); rc != 0) {
     return rc;
   }
   return ble_gatts_add_svcs(svcs);
 }
 
-int BleServer::start() {
+int BleServer::start() noexcept {
   nimble_port_freertos_init(BleServer::hostTask);
   return 0;
 }

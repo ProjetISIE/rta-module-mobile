@@ -35,7 +35,7 @@ public:
   void start();
 
   /// Retrieves a copy of the current status (Thread-safe).
-  [[nodiscard]] GpsStatus getStatus() const;
+  [[nodiscard]] GpsStatus getStatus() const noexcept;
 
   /// Processes a raw NMEA sentence.
   void processNmeaSentence(std::string_view sentence);

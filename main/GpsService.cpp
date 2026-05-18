@@ -3,17 +3,16 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "host/ble_hs.h"
+#include "gpgga.h"
+#include "gprmc.h"
+#include "host/ble_gatt.h"
+#include "nmea.h"
 #include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <numbers>
+#include <span>
 #include <vector>
-
-// libnmea headers
-#include "gpgga.h"
-#include "gprmc.h"
-#include "nmea.h"
 
 namespace rta {
 
@@ -57,20 +56,22 @@ double convertPositionToDecimal(nmea_position pos) {
 
 extern "C" uint16_t gatt_svr_chr_spd_val_handle;
 
-GpsStatus GpsService::getStatus() const {
-  std::lock_guard lock(mutex_);
+GpsStatus GpsService::getStatus() const noexcept {
+  std::scoped_lock lock(mutex_);
   return status_;
 }
 
 void GpsService::processNmeaSentence(std::string_view sentence) {
   // libnmea requires a mutable char*
-  std::vector<char> mutableSentence(sentence.begin(), sentence.end());
+  static thread_local std::vector<char> mutableSentence;
+  mutableSentence.assign(sentence.begin(), sentence.end());
+
   nmea_s *data = nmea_parse(mutableSentence.data(), mutableSentence.size(), 1);
   if (!data)
     return;
 
   {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock lock(mutex_);
     if (data->type == NMEA_GPRMC) {
       auto *rmc = reinterpret_cast<nmea_gprmc_s *>(data);
       if (rmc->valid) {
@@ -143,45 +144,55 @@ void GpsService::readerTask(void *) {
   size_t totalBytes = 0;
 
   while (true) {
-    int len = uart_read_bytes(GPS_UART_PORT, buffer.data() + totalBytes,
-                              buffer.size() - totalBytes, pdMS_TO_TICKS(100));
+    const int len =
+        uart_read_bytes(GPS_UART_PORT, buffer.data() + totalBytes,
+                        buffer.size() - totalBytes, pdMS_TO_TICKS(100));
     if (len > 0) {
       totalBytes += len;
 
-      size_t consumedUpTo = 0;
-      while (consumedUpTo < totalBytes) {
-        auto *currentPtr = buffer.data() + consumedUpTo;
-        auto *endPtr = buffer.data() + totalBytes;
+      auto currentRange = std::span{buffer.data(), totalBytes};
 
-        auto *sentenceStart = std::find(currentPtr, endPtr, '$');
-        if (sentenceStart == endPtr) {
+      while (!currentRange.empty()) {
+        auto itStart = std::find(currentRange.begin(), currentRange.end(), '$');
+        if (itStart == currentRange.end()) {
           totalBytes = 0;
           break;
         }
 
-        auto *sentenceEnd = std::find(sentenceStart, endPtr, '\r');
-        if (sentenceEnd == endPtr || (sentenceEnd + 1 == endPtr) ||
-            *(sentenceEnd + 1) != '\n') {
+        auto itEnd = std::find(itStart, currentRange.end(), '\r');
+        if (itEnd == currentRange.end() ||
+            std::next(itEnd) == currentRange.end() ||
+            *std::next(itEnd) != '\n') {
           // Incomplete frame, shift remaining data to start
-          size_t remaining = endPtr - sentenceStart;
-          std::memmove(buffer.data(), sentenceStart, remaining);
+          const size_t remaining = std::distance(itStart, currentRange.end());
+          std::memmove(buffer.data(), &(*itStart), remaining);
           totalBytes = remaining;
-          consumedUpTo = totalBytes;
           break;
         }
 
         // Complete frame found
-        size_t sentenceLen = (sentenceEnd + 2) - sentenceStart;
+        const size_t sentenceLen = std::distance(itStart, itEnd) + 2;
         if (sentenceLen <= NMEA_MAX_LENGTH) {
           service.processNmeaSentence(std::string_view(
-              reinterpret_cast<const char *>(sentenceStart), sentenceLen));
+              reinterpret_cast<const char *>(&(*itStart)), sentenceLen));
         }
-        consumedUpTo = (sentenceEnd + 2) - buffer.data();
 
-        if (consumedUpTo == totalBytes) {
+        const size_t consumed = std::distance(currentRange.begin(), itEnd) + 2;
+        currentRange = currentRange.subspan(consumed);
+
+        if (currentRange.empty()) {
           totalBytes = 0;
+        } else {
+          totalBytes = currentRange.size();
+          // We don't necessarily need to memmove every time if we're careful,
+          // but for simplicity and to avoid complex ring buffer logic, we shift
+          // if needed at the end of loop.
         }
       }
+
+      // If we still have data but didn't find a complete frame in the current
+      // chunk, it's already handled by the memmove above if it was an
+      // incomplete frame.
     }
   }
 }

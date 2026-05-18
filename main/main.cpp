@@ -101,19 +101,19 @@ extern "C" void app_main() {
   }
   ESP_ERROR_CHECK(ret);
 
-  // Create App Context (stays alive for the duration of the app)
-  static auto ctx = std::make_unique<AppContext>();
+  // App Context stays alive for the duration of the app
+  static AppContext ctx;
 
   // Initialize BLE Server
-  if (ctx->server.init() != 0) {
+  if (ctx.server.init() != 0) {
     ESP_LOGE(TAG.data(), "Failed to initialize BLE server");
     return;
   }
 
   // Set sync callback to start both advertising and scanning
-  ctx->server.setSyncCallback([]() {
-    ctx->server.startAdvertising();
-    ctx->manager.startScanning();
+  ctx.server.setSyncCallback([]() {
+    ctx.server.startAdvertising();
+    ctx.manager.startScanning();
     ESP_LOGI(TAG.data(), "BLE synchronized: Advertising and Scanning started");
   });
 
@@ -121,10 +121,9 @@ extern "C" void app_main() {
   rta::GpsService::instance().start();
 
   // Register services and start BLE stack
-  ctx->server.registerServices(gps_gatt_svcs);
-  ctx->server.start();
+  ctx.server.registerServices(gps_gatt_svcs);
+  ctx.server.start();
 
   // Create display task
-  xTaskCreate(processAndDisplayTask, "display_task", 4096, ctx.get(), 5,
-              nullptr);
+  xTaskCreate(processAndDisplayTask, "display_task", 4096, &ctx, 5, nullptr);
 }

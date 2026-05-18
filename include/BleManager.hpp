@@ -22,7 +22,7 @@ public:
   /**
    * @brief Starts scanning for ActiveLook (ENGO) glasses.
    */
-  void startScanning();
+  void startScanning() noexcept;
 
 private:
   static int gapEventCallback(struct ble_gap_event *event, void *arg);

@@ -19,7 +19,7 @@ BleManager::BleManager(ActiveLook &glasses) : glasses_(glasses) {
   instance_ = this;
 }
 
-void BleManager::startScanning() {
+void BleManager::startScanning() noexcept {
   struct ble_gap_disc_params dp{};
   ble_gap_disc(BLE_OWN_ADDR_PUBLIC, BLE_HS_FOREVER, &dp,
                BleManager::gapEventCallback, this);

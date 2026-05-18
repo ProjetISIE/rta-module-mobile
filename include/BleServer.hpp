@@ -27,7 +27,7 @@ public:
    * @brief Initializes the BLE stack.
    * @return 0 on success, error code otherwise.
    */
-  int init();
+  [[nodiscard]] int init() noexcept;
 
   /**
    * @brief Registers GATT services.
@@ -35,13 +35,14 @@ public:
    * entry).
    * @return 0 on success.
    */
-  int registerServices(const struct ble_gatt_svc_def *svcs);
+  [[nodiscard]] int
+  registerServices(const struct ble_gatt_svc_def *svcs) noexcept;
 
   /**
    * @brief Starts the BLE stack and host task.
    * @return 0 on success.
    */
-  int start();
+  [[nodiscard]] int start() noexcept;
 
   /**
    * @brief Starts advertising.

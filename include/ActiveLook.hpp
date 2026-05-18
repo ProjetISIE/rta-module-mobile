@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <optional>
 #include <span>
@@ -14,7 +15,7 @@ namespace rta {
 class ActiveLook {
 public:
   /// Bluetooth characteristic handles used for commands.
-  static constexpr uint16_t COMMAND_HANDLES[] = {35, 56, 32};
+  static constexpr std::array<uint16_t, 3> COMMAND_HANDLES = {35, 56, 32};
 
   /// ActiveLook protocol constants
   enum class Command : uint8_t {
