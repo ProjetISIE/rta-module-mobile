@@ -1,9 +1,9 @@
 idf_component_register(
   SRCS
   "main.cpp"
-  "ble_server.c"
+  "ble_server.cpp"
   "GpsService.cpp"
-  "gps_gatt_def.c"
+  "gps_gatt_def.cpp"
   "active_look.cpp"
   "ble_manager.cpp"
   INCLUDE_DIRS
@@ -14,4 +14,3 @@ idf_component_register(
   esp_driver_uart
   log
   freertos)
-
