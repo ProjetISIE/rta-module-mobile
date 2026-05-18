@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <numbers>
+#include <vector>
 
 // libnmea headers
 #include "gpgga.h"
@@ -15,77 +17,82 @@
 // NimBLE headers
 #include "host/ble_hs.h"
 
-static const double EARTH_RADIUS_KM = 6371.0;
-static const double MIN_ODOMETER_ACCURACY_KM = 0.001;
-static const double MIN_SPEED_KMH_THRESHOLD = 0.5;
-
-// UART Config
-#define GPS_UART_PORT UART_NUM_2
-#define GPS_RX_PIN 16
-#define GPS_TX_PIN 17
-#define UART_BUF_SIZE 1024
-
-// PMTK Commands
-static const char *PMTK_SET_BAUD_115200 = "$PMTK251,115200*1F\r\n";
-static const char *PMTK_SET_NMEA_OUTPUT_RMCGGA =
-    "$PMTK314,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0*28\r\n";
-static const char *PMTK_SET_NMEA_UPDATE_5HZ = "$PMTK220,200*2C\r\n";
-
-extern "C" uint16_t gatt_svr_chr_spd_val_handle;
-
 namespace rta {
 
-static double calculateDistance(double lat1, double long1, double lat2,
-                                double long2) {
-  auto dLat = (lat2 - lat1) * M_PI / 180.0;
-  auto dLon = (long2 - long1) * M_PI / 180.0;
-  lat1 = lat1 * M_PI / 180.0;
-  lat2 = lat2 * M_PI / 180.0;
+namespace {
+constexpr double EARTH_RADIUS_KM = 6371.0;
+constexpr double MIN_ODOMETER_ACCURACY_KM = 0.001;
+constexpr float MIN_SPEED_KMH_THRESHOLD = 0.5f;
+
+// Configuration UART
+constexpr uart_port_t GPS_UART_PORT = UART_NUM_2;
+constexpr int GPS_RX_PIN = 16;
+constexpr int GPS_TX_PIN = 17;
+constexpr int UART_BUF_SIZE = 1024;
+
+// Commandes PMTK
+constexpr std::string_view PMTK_SET_BAUD_115200 = "$PMTK251,115200*1F\r\n";
+constexpr std::string_view PMTK_SET_NMEA_OUTPUT_RMCGGA =
+    "$PMTK314,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0*28\r\n";
+constexpr std::string_view PMTK_SET_NMEA_UPDATE_5HZ = "$PMTK220,200*2C\r\n";
+
+double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
+  using namespace std::numbers;
+  auto dLat = (lat2 - lat1) * pi / 180.0;
+  auto dLon = (lon2 - lon1) * pi / 180.0;
+  lat1 = lat1 * pi / 180.0;
+  lat2 = lat2 * pi / 180.0;
   auto a = std::pow(std::sin(dLat / 2), 2) +
            std::pow(std::sin(dLon / 2), 2) * std::cos(lat1) * std::cos(lat2);
   auto c = 2 * std::asin(std::sqrt(a));
   return EARTH_RADIUS_KM * c;
 }
 
-static double convert_position_to_decimal(nmea_position pos) {
+double convertPositionToDecimal(nmea_position pos) {
   auto decimal_degrees = pos.degrees + (pos.minutes / 60.0);
   if (pos.cardinal == 'S' || pos.cardinal == 'W') {
     decimal_degrees = -decimal_degrees;
   }
   return decimal_degrees;
 }
+} // namespace
 
-gps_status_t GpsService::getStatus() const {
-  std::lock_guard<std::mutex> lock(mutex_);
+extern "C" uint16_t gatt_svr_chr_spd_val_handle;
+
+GpsStatus GpsService::getStatus() const {
+  std::lock_guard lock(mutex_);
   return status_;
 }
 
-void GpsService::processNmeaSentence(const char *sentence, size_t len) {
-  nmea_s *data = nmea_parse(const_cast<char *>(sentence), len, 1);
+void GpsService::processNmeaSentence(std::string_view sentence) {
+  // libnmea nécessite un char* mutable
+  std::vector<char> mutable_sentence(sentence.begin(), sentence.end());
+  nmea_s *data =
+      nmea_parse(mutable_sentence.data(), mutable_sentence.size(), 1);
   if (!data)
     return;
 
   {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard lock(mutex_);
     if (data->type == NMEA_GPRMC) {
       auto *rmc = reinterpret_cast<nmea_gprmc_s *>(data);
       if (rmc->valid) {
         status_.fix = true;
-        status_.latitude = convert_position_to_decimal(rmc->latitude);
-        status_.longitude = convert_position_to_decimal(rmc->longitude);
+        status_.latitude = convertPositionToDecimal(rmc->latitude);
+        status_.longitude = convertPositionToDecimal(rmc->longitude);
         status_.speed_kmh = rmc->gndspd_knots * 1.852f;
 
-        if (firstFix_) {
-          lastLat_ = status_.latitude;
-          lastLon_ = status_.longitude;
-          firstFix_ = false;
+        if (first_fix_) {
+          last_lat_ = status_.latitude;
+          last_lon_ = status_.longitude;
+          first_fix_ = false;
         } else if (status_.speed_kmh > MIN_SPEED_KMH_THRESHOLD) {
-          auto dist = calculateDistance(lastLat_, lastLon_, status_.latitude,
+          auto dist = calculateDistance(last_lat_, last_lon_, status_.latitude,
                                         status_.longitude);
           if (dist > MIN_ODOMETER_ACCURACY_KM) {
             status_.odometer_km += dist;
-            lastLat_ = status_.latitude;
-            lastLon_ = status_.longitude;
+            last_lat_ = status_.latitude;
+            last_lon_ = status_.longitude;
           }
         }
         ble_gatts_chr_updated(gatt_svr_chr_spd_val_handle);
@@ -105,7 +112,7 @@ void GpsService::processNmeaSentence(const char *sentence, size_t len) {
   nmea_free(data);
 }
 
-static void reader_task(void *arg) {
+static void reader_task(void *) {
   auto &service = GpsService::instance();
 
   uart_config_t uart_config = {.baud_rate = 9600,
@@ -124,57 +131,57 @@ static void reader_task(void *arg) {
                                UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
 
   vTaskDelay(pdMS_TO_TICKS(100));
-  uart_write_bytes(GPS_UART_PORT, PMTK_SET_BAUD_115200,
-                   std::strlen(PMTK_SET_BAUD_115200));
+  uart_write_bytes(GPS_UART_PORT, PMTK_SET_BAUD_115200.data(),
+                   PMTK_SET_BAUD_115200.size());
   vTaskDelay(pdMS_TO_TICKS(100));
   ESP_ERROR_CHECK(uart_set_baudrate(GPS_UART_PORT, 115200));
 
-  uart_write_bytes(GPS_UART_PORT, PMTK_SET_NMEA_OUTPUT_RMCGGA,
-                   std::strlen(PMTK_SET_NMEA_OUTPUT_RMCGGA));
+  uart_write_bytes(GPS_UART_PORT, PMTK_SET_NMEA_OUTPUT_RMCGGA.data(),
+                   PMTK_SET_NMEA_OUTPUT_RMCGGA.size());
   vTaskDelay(pdMS_TO_TICKS(100));
-  uart_write_bytes(GPS_UART_PORT, PMTK_SET_NMEA_UPDATE_5HZ,
-                   std::strlen(PMTK_SET_NMEA_UPDATE_5HZ));
+  uart_write_bytes(GPS_UART_PORT, PMTK_SET_NMEA_UPDATE_5HZ.data(),
+                   PMTK_SET_NMEA_UPDATE_5HZ.size());
 
-  auto *buffer = static_cast<char *>(std::malloc(UART_BUF_SIZE));
+  std::vector<uint8_t> buffer(UART_BUF_SIZE);
   size_t total_bytes = 0;
 
   while (true) {
-    int len = uart_read_bytes(GPS_UART_PORT,
-                              reinterpret_cast<uint8_t *>(buffer) + total_bytes,
-                              UART_BUF_SIZE - total_bytes, pdMS_TO_TICKS(100));
+    int len = uart_read_bytes(GPS_UART_PORT, buffer.data() + total_bytes,
+                              buffer.size() - total_bytes, pdMS_TO_TICKS(100));
     if (len > 0) {
       total_bytes += len;
-      while (total_bytes > 0) {
-        char *start =
-            static_cast<char *>(std::memchr(buffer, '$', total_bytes));
-        if (!start) {
+
+      size_t consumed_up_to = 0;
+      while (consumed_up_to < total_bytes) {
+        auto *current_ptr = buffer.data() + consumed_up_to;
+        auto *end_ptr = buffer.data() + total_bytes;
+
+        auto *sentence_start = std::find(current_ptr, end_ptr, '$');
+        if (sentence_start == end_ptr) {
           total_bytes = 0;
           break;
         }
-        if (start != buffer) {
-          size_t skip = start - buffer;
-          std::memmove(buffer, start, total_bytes - skip);
-          total_bytes -= skip;
-          start = buffer;
-        }
-        char *end = static_cast<char *>(std::memchr(start, '\r', total_bytes));
-        if (!end || (end + 1 >= buffer + total_bytes) || *(end + 1) != '\n')
+
+        auto *sentence_end = std::find(sentence_start, end_ptr, '\r');
+        if (sentence_end == end_ptr || (sentence_end + 1 == end_ptr) ||
+            *(sentence_end + 1) != '\n') {
+          // Trame incomplète, on décale les données restantes au début
+          size_t remaining = end_ptr - sentence_start;
+          std::memmove(buffer.data(), sentence_start, remaining);
+          total_bytes = remaining;
+          consumed_up_to = total_bytes; // Pour sortir de la boucle
           break;
-        end++;
-
-        size_t sentence_len = end - start + 1;
-        if (sentence_len <= NMEA_MAX_LENGTH) {
-          char sentence[NMEA_MAX_LENGTH + 1];
-          std::memcpy(sentence, start, sentence_len);
-          sentence[sentence_len] = '\0';
-          service.processNmeaSentence(sentence, sentence_len);
         }
 
-        size_t consumed = sentence_len;
-        if (consumed < total_bytes) {
-          std::memmove(buffer, start + consumed, total_bytes - consumed);
-          total_bytes -= consumed;
-        } else {
+        // Trame complète trouvée
+        size_t sentence_len = (sentence_end + 2) - sentence_start;
+        if (sentence_len <= NMEA_MAX_LENGTH) {
+          service.processNmeaSentence(std::string_view(
+              reinterpret_cast<const char *>(sentence_start), sentence_len));
+        }
+        consumed_up_to = (sentence_end + 2) - buffer.data();
+
+        if (consumed_up_to == total_bytes) {
           total_bytes = 0;
         }
       }
@@ -188,7 +195,6 @@ void GpsService::start() {
 
 } // namespace rta
 
-// Bridge for the C GATT table access
 extern "C" float gps_service_get_speed() {
   return rta::GpsService::instance().getStatus().speed_kmh;
 }

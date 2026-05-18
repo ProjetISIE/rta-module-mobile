@@ -2,110 +2,97 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "host/ble_hs.h"
-#include <string.h>
+#include <array>
+#include <cstring>
+#include <format>
 #include <string>
 
-// Prépare et envoie une trame de données aux lunettes selon le protocole
-// propriétaire ActiveLook
-void ActiveLook::sendCommand(uint8_t cmd, const uint8_t *payload,
-                             uint16_t len) {
-  uint8_t buf[128];
-  uint16_t total_len = 4 + len + 1; // Calcul de la taille de la trame
+void ActiveLook::sendCommand(Command cmd, std::span<const uint8_t> payload) {
+  if (!connection_handle_)
+    return;
 
-  buf[0] = 0xFF; // Octet de début de trame, constant
-  buf[1] = cmd;  // Commande à exécuter (ex: 0x01 pour effacer)
-  buf[2] = (uint8_t)(total_len >> 8);   // Taille (poids fort)
-  buf[3] = (uint8_t)(total_len & 0xFF); // Taille (poids faible)
+  // Construction de la trame : [0xFF, CMD, LEN_H, LEN_L, PAYLOAD..., 0xAA]
+  const size_t total_len = 4 + payload.size() + 1;
+  std::vector<uint8_t> buf;
+  buf.reserve(total_len);
 
-  // S'il y a des données utiles (coordonnées, texte...), on les insère dans le
-  // buffer
-  if (payload && len > 0)
-    memcpy(&buf[4], payload, len);
-  buf[4 + len] = 0xAA; // Octet de fin de trame, constant
+  buf.push_back(0xFF);
+  buf.push_back(static_cast<uint8_t>(cmd));
+  buf.push_back(static_cast<uint8_t>(total_len >> 8));
+  buf.push_back(static_cast<uint8_t>(total_len & 0xFF));
 
-  // Envoi de la trame via BLE sur chaque handle identifié
-  for (uint16_t h : handles) {
-    ble_gattc_write_no_rsp_flat(connection_handle, h, buf, total_len);
+  if (!payload.empty()) {
+    buf.insert(buf.end(), payload.begin(), payload.end());
+  }
+  buf.push_back(0xAA);
+
+  for (uint16_t h : COMMAND_HANDLES) {
+    ble_gattc_write_no_rsp_flat(*connection_handle_, h, buf.data(), buf.size());
   }
 }
 
-// Allume l'écran des lunettes et y envoie un texte de test
-void ActiveLook::displayHello(uint16_t conn_h) {
-  connection_handle = conn_h; // Sauvegarde l'identifiant de la connexion active
+void ActiveLook::initializeDisplay(uint16_t conn_handle) {
+  connection_handle_ = conn_handle;
 
-  uint8_t vOn = 0x01, vFlip = 0x02;
-  sendCommand(0x00, &vOn, 1); // Commande The Power: Allume l'écran
-  sendCommand(
-      0x03, &vFlip,
-      1); // Configuration: Retourne l'écran si nécessaire ou change le mode
+  // Allumage et configuration de l'écran
+  const uint8_t vOn = 0x01;
+  const uint8_t vFlip = 0x02;
+  sendCommand(Command::POWER, std::span(&vOn, 1));
+  sendCommand(Command::CONFIG, std::span(&vFlip, 1));
 
-  // Attente brève (50ms) pour laisser le temps à l'écran de s'initialiser
+  vTaskDelay(pdMS_TO_TICKS(50));
+  displayText("RTA OK");
+}
+
+void ActiveLook::displayText(const char *msg) {
+  if (!connection_handle_)
+    return;
+
+  sendCommand(Command::CLEAR);
   vTaskDelay(pdMS_TO_TICKS(50));
 
-  displayText("RTA OK"); // Affiche le texte de test initial
+  // Configuration LumaText : {X, Y, Rotation, Font, Couleur}
+  // Ici on utilise des valeurs par défaut pour centrer ou positionner
+  std::vector<uint8_t> txt = {0x00, 0x99, 0x00, 0x60, 0x04, 0x02, 0x0F};
+
+  std::string_view sv(msg);
+  if (sv.length() > 50)
+    sv = sv.substr(0, 50);
+
+  for (char c : sv)
+    txt.push_back(static_cast<uint8_t>(c));
+  txt.push_back('\0');
+
+  sendCommand(Command::LUMA_TEXT, txt);
 }
 
-// [NOUVEAU] Efface l'écran et affiche un nouveau texte
-void ActiveLook::displayText(const char *msg) {
-  if (connection_handle == 0xFFFF)
-    return; // Ignore si on n'est pas connecté (0xFFFF)
-
-  sendCommand(0x01); // Efface l'ancien texte pour éviter la superposition
-  vTaskDelay(pdMS_TO_TICKS(
-      50)); // DELAI OBLIGATOIRE avant d'envoyer le texte sinon il est annulé !
-
-  // Préparation des paramètres de la commande LumaText
-  // txt regroupe : {X, Y, Rotation, Font, Couleur}
-  uint8_t txt[64] = {0x00, 0x99, 0x00, 0x60, 0x04, 0x02, 0x0F};
-
-  // Sécurité: limite la taille du texte à 50 caractères pour entrer dans le
-  // buffer
-  size_t msg_len = strlen(msg) > 50 ? 50 : strlen(msg);
-  memcpy(&txt[7], msg, msg_len);
-  txt[7 + msg_len] = '\0'; // Caractère de fin
-
-  // Envoi de la commande texte (0x37)
-  sendCommand(0x37, txt, 7 + msg_len + 1);
-}
-
-// Affiche un nombre entier (converti en texte)
 void ActiveLook::displayNumber(int value) {
-  char buffer[16];
-  snprintf(buffer, sizeof(buffer), "%d",
-           value);     // Convertit le chiffre en texte
-  displayText(buffer); // Appelle la méthode d'affichage
+  displayText(std::format("{}", value).c_str());
 }
 
 void ActiveLook::displayGpsWait() { displayText("Wait..."); }
 
-// Affiche les coordonnées GPS sur deux lignes, recadrées à 6 caractères
 void ActiveLook::displayCoordinates(double lat, double lon) {
-  if (connection_handle == 0xFFFF)
+  if (!connection_handle_)
     return;
 
-  sendCommand(0x01); // Efface l'écran
+  sendCommand(Command::CLEAR);
   vTaskDelay(pdMS_TO_TICKS(50));
 
-  char raw[32];
-  char buffer[16];
+  auto format_coord = [](double val, uint8_t y_pos) {
+    // Formatage : "%.4f" puis troncature à 6 caractères
+    std::string s = std::format("{:.4f}", val);
+    if (s.length() > 6)
+      s = s.substr(0, 6);
 
-  // Affichage Latitude (Ligne 1) - Cropped to 6 chars total
-  snprintf(raw, sizeof(raw), "%.4f", lat);
-  snprintf(buffer, 7, "%-6.6s", raw);
-  uint8_t txtLat[64] = {0x00, 0x99, 0x00, 0x40, 0x04, 0x02, 0x0F};
-  size_t lenLat = strlen(buffer);
-  memcpy(&txtLat[7], buffer, lenLat);
-  txtLat[7 + lenLat] = '\0';
-  sendCommand(0x37, txtLat, 7 + lenLat + 1);
+    std::vector<uint8_t> payload = {0x00, 0x99, 0x00, y_pos, 0x04, 0x02, 0x0F};
+    for (char c : s)
+      payload.push_back(static_cast<uint8_t>(c));
+    payload.push_back('\0');
+    return payload;
+  };
 
+  sendCommand(Command::LUMA_TEXT, format_coord(lat, 0x40));
   vTaskDelay(pdMS_TO_TICKS(50));
-
-  // Affichage Longitude (Ligne 2) - Cropped to 6 chars total
-  snprintf(raw, sizeof(raw), "%.4f", lon);
-  snprintf(buffer, 7, "%-6.6s", raw);
-  uint8_t txtLon[64] = {0x00, 0x99, 0x00, 0x80, 0x04, 0x02, 0x0F};
-  size_t lenLon = strlen(buffer);
-  memcpy(&txtLon[7], buffer, lenLon);
-  txtLon[7 + lenLon] = '\0';
-  sendCommand(0x37, txtLon, 7 + lenLon + 1);
+  sendCommand(Command::LUMA_TEXT, format_coord(lon, 0x80));
 }

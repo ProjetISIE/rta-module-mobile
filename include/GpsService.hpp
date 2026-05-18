@@ -1,20 +1,29 @@
 #pragma once
+
 #include <atomic>
 #include <cstdint>
 #include <mutex>
-#include <string>
+#include <string_view>
 
 namespace rta {
 
-typedef struct {
-  double latitude;
-  double longitude;
-  float speed_kmh;
-  double odometer_km;
-  int satellites;
-  bool fix;
-} gps_status_t;
+/**
+ * @brief Structure représentant l'état du GPS.
+ */
+struct GpsStatus {
+  double latitude{0.0};
+  double longitude{0.0};
+  float speed_kmh{0.0f};
+  double odometer_km{0.0};
+  int satellites{0};
+  bool fix{false};
+};
 
+/**
+ * @brief Service de gestion du GPS et du traitement des trames NMEA.
+ *
+ * Suit le pattern Singleton pour un accès global au sein de l'application.
+ */
 class GpsService {
 public:
   static GpsService &instance() {
@@ -22,21 +31,24 @@ public:
     return inst;
   }
 
+  /// Démarre la tâche de lecture UART.
   void start();
-  gps_status_t getStatus() const;
 
-  // Internal callback for the task
-  void processNmeaSentence(const char *sentence, size_t len);
+  /// Récupère une copie de l'état actuel (Thread-safe).
+  [[nodiscard]] GpsStatus getStatus() const;
+
+  /// Traite une trame NMEA brute.
+  void processNmeaSentence(std::string_view sentence);
 
 private:
   GpsService() = default;
 
   mutable std::mutex mutex_;
-  gps_status_t status_{};
+  GpsStatus status_{};
 
-  double lastLat_{0.0};
-  double lastLon_{0.0};
-  bool firstFix_{true};
+  double last_lat_{0.0};
+  double last_lon_{0.0};
+  bool first_fix_{true};
 };
 
 } // namespace rta

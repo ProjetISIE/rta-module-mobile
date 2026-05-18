@@ -1,41 +1,78 @@
 #pragma once
-#include <stdint.h>
+
+#include <cstdint>
+#include <optional>
+#include <span>
 #include <vector>
 
-// Classe gérant la communication avec les lunettes connectées ActiveLook
+/**
+ * @brief Classe gérant la communication avec les lunettes connectées
+ * ActiveLook.
+ *
+ * Cette classe implémente le protocole propriétaire pour envoyer des commandes
+ * et afficher des informations sur l'écran des lunettes via BLE.
+ */
 class ActiveLook {
-private:
-  uint16_t connection_handle = 0xFFFF; // Handle BLE (0xFFFF = non connecté.
-                                       // Attention, 0 est un handle valide !)
-  // Liste des handles (caractéristiques Bluetooth) où nous envoyons nos
-  // commandes
-  const std::vector<uint16_t> handles = {35, 56, 32};
-
 public:
-  // Envoie une commande structurée aux lunettes (ex: allumer, configurer,
-  // afficher texte)
-  void sendCommand(uint8_t cmd, const uint8_t *payload = nullptr,
-                   uint16_t len = 0);
+  /// Identifiants des caractéristiques Bluetooth utilisées pour les commandes.
+  static constexpr uint16_t COMMAND_HANDLES[] = {35, 56, 32};
 
-  // Fonction principale pour initialiser l'écran et y afficher un message par
-  // défaut
-  void displayHello(uint16_t conn_h);
+  /// Constantes du protocole ActiveLook
+  enum class Command : uint8_t {
+    POWER = 0x00,
+    CLEAR = 0x01,
+    CONFIG = 0x03,
+    LUMA_TEXT = 0x37
+  };
 
-  // Affiche n'importe quel texte sur l'écran
+  /**
+   * @brief Envoie une commande structurée aux lunettes.
+   * @param cmd Code de la commande à exécuter.
+   * @param payload Données optionnelles associées à la commande.
+   */
+  void sendCommand(Command cmd, std::span<const uint8_t> payload = {});
+
+  /**
+   * @brief Initialise l'affichage après la connexion.
+   * @param conn_handle Identifiant de la connexion BLE.
+   */
+  void initializeDisplay(uint16_t conn_handle);
+
+  /**
+   * @brief Affiche du texte sur l'écran.
+   * @param msg Message à afficher.
+   */
   void displayText(const char *msg);
 
-  // Affiche n'importe quel nombre (ex: vitesse du GPS) sur l'écran
+  /**
+   * @brief Affiche un nombre entier.
+   * @param value Valeur à afficher.
+   */
   void displayNumber(int value);
 
-  // Vérifie si les lunettes sont connectées
-  bool isConnected() const { return connection_handle != 0xFFFF; }
+  /**
+   * @brief Vérifie l'état de la connexion.
+   * @return true si les lunettes sont connectées.
+   */
+  bool isConnected() const { return connection_handle_.has_value(); }
 
-  // Réinitialise l'état de connexion
-  void disconnect() { connection_handle = 0xFFFF; }
+  /**
+   * @brief Réinitialise l'état lors de la déconnexion.
+   */
+  void disconnect() { connection_handle_.reset(); }
 
-  // Affiche un message d'attente
+  /**
+   * @brief Affiche un message d'attente pour le fix GPS.
+   */
   void displayGpsWait();
 
-  // Affiche les coordonnées GPS sur deux lignes, recadrées à 6 caractères
+  /**
+   * @brief Affiche les coordonnées GPS sur l'écran.
+   * @param lat Latitude.
+   * @param lon Longitude.
+   */
   void displayCoordinates(double lat, double lon);
+
+private:
+  std::optional<uint16_t> connection_handle_;
 };

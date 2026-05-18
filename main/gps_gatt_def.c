@@ -2,21 +2,32 @@
 #include "services/gatt/ble_svc_gatt.h"
 #include <string.h>
 
-// Bridge function from GpsService.cpp
+/**
+ * @file gps_gatt_def.c
+ * @brief Définition du profil GATT pour le service GPS.
+ */
+
+// Fonction de pont définie dans GpsService.cpp
 extern float gps_service_get_speed();
 
 uint16_t gatt_svr_chr_spd_val_handle;
 
+// UUID du service (Généré aléatoirement)
 static const ble_uuid128_t gatt_svr_svc_uuid =
     BLE_UUID128_INIT(0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad,
                      0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef);
 
+// UUID de la caractéristique de vitesse
 static const ble_uuid128_t gatt_svr_chr_spd_uuid =
     BLE_UUID128_INIT(0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa,
                      0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x00);
 
+// UUID du descripteur de caractéristique
 static const ble_uuid16_t gatt_svr_dsc_uuid = BLE_UUID16_INIT(0x2901);
 
+/**
+ * @brief Callback d'accès pour la caractéristique de vitesse.
+ */
 static int gatt_svr_chr_access(uint16_t conn_handle, uint16_t attr_handle,
                                struct ble_gatt_access_ctxt *ctxt, void *arg) {
   if (ble_uuid_cmp(ctxt->chr->uuid, &gatt_svr_chr_spd_uuid.u) == 0) {
@@ -28,12 +39,16 @@ static int gatt_svr_chr_access(uint16_t conn_handle, uint16_t attr_handle,
   return BLE_ATT_ERR_UNLIKELY;
 }
 
+/**
+ * @brief Callback d'accès pour le descripteur de caractéristique.
+ */
 static int gatt_svr_dsc_access(uint16_t conn_handle, uint16_t attr_handle,
                                struct ble_gatt_access_ctxt *ctxt, void *arg) {
-  const char *desc = "Speed (km/h)";
+  const char *desc = "Vitesse (km/h)";
   return os_mbuf_append(ctxt->om, desc, strlen(desc));
 }
 
+// Définition de la table des services GATT
 const struct ble_gatt_svc_def gps_gatt_svcs[] = {
     {
         .type = BLE_GATT_SVC_TYPE_PRIMARY,
