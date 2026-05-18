@@ -27,6 +27,12 @@ public:
   // Affiche n'importe quel nombre (ex: vitesse du GPS) sur l'écran
   void displayNumber(int value);
 
-  // Affiche la vitesse et les coordonnées GPS
-  void displayGpsData(float speed, double lat, double lon);
+  // Vérifie si les lunettes sont connectées
+  bool isConnected() const { return connection_handle != 0xFFFF; }
+
+  // Affiche un message d'attente
+  void displayGpsWait();
+
+  // Affiche les coordonnées GPS sur deux lignes, recadrées à 6 caractères
+  void displayCoordinates(double lat, double lon);
 };

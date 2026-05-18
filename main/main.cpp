@@ -34,36 +34,49 @@ extern "C" void combined_on_sync(void) {
 
 void process_and_display_task(void *arg) {
   auto &gps = rta::GpsService::instance();
-  bool first_search = true;
+  int rta_ok_timer = 0;
+  bool was_connected = false;
 
   while (true) {
+    bool connected = myGlasses.isConnected();
     auto status = gps.getStatus();
+
+    if (connected) {
+      if (!was_connected) {
+        // Nouvelle connexion : le timer commence (displayHello a déjà affiché
+        // "RTA OK")
+        rta_ok_timer = 5;
+        was_connected = true;
+      }
+
+      if (rta_ok_timer > 0) {
+        // Pendant les 5 premières secondes, on ne change rien (on laisse RTA
+        // OK)
+        rta_ok_timer--;
+      } else {
+        if (status.fix) {
+          myGlasses.displayCoordinates(status.latitude, status.longitude);
+        } else {
+          myGlasses.displayGpsWait();
+        }
+      }
+    } else {
+      was_connected = false;
+      rta_ok_timer = 0;
+    }
+
+    // Affichage local toujours actif pour le debug
     if (status.fix) {
-      // Affichage local (console)
       std::printf(
           "\r[FIX OK] Sat: %2d | Speed: %6.2f km/h | L: %9.6f, %9.6f   ",
           status.satellites, status.speed_kmh, status.latitude,
           status.longitude);
-      std::fflush(stdout);
-
-      // Affichage sur les lunettes ActiveLook
-      myGlasses.displayGpsData(status.speed_kmh, status.latitude,
-                               status.longitude);
-      first_search = true;
     } else {
       std::printf("\r[WAITING] No fix data parsed yet...          ");
-      std::fflush(stdout);
-
-      if (first_search) {
-        // On affiche "RTA OK" (ou Searching GPS) si on n'a pas encore de fix
-        // mais qu'on est connecté. myGlasses.displayText gère déjà le check
-        // connection_handle.
-        myGlasses.displayText("RTA OK");
-        first_search = false;
-      }
     }
-    vTaskDelay(pdMS_TO_TICKS(
-        1000)); // Mise à jour toutes les secondes pour les lunettes
+    std::fflush(stdout);
+
+    vTaskDelay(pdMS_TO_TICKS(1000));
   }
 }
 

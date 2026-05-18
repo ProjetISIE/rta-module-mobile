@@ -3,6 +3,7 @@
 #include "freertos/task.h"
 #include "host/ble_hs.h"
 #include <string.h>
+#include <string>
 
 // Prépare et envoie une trame de données aux lunettes selon le protocole
 // propriétaire ActiveLook
@@ -75,34 +76,33 @@ void ActiveLook::displayNumber(int value) {
   displayText(buffer); // Appelle la méthode d'affichage
 }
 
-// Affiche la vitesse et les coordonnées GPS
-void ActiveLook::displayGpsData(float speed, double lat, double lon) {
+void ActiveLook::displayGpsWait() { displayText("Wait..."); }
+
+// Affiche les coordonnées GPS sur deux lignes, recadrées à 6 caractères
+void ActiveLook::displayCoordinates(double lat, double lon) {
   if (connection_handle == 0xFFFF)
     return;
 
   sendCommand(0x01); // Efface l'écran
   vTaskDelay(pdMS_TO_TICKS(50));
 
-  char buffer[64];
+  char buffer[16];
 
-  // Affichage de la vitesse
-  snprintf(buffer, sizeof(buffer), "%.1f km/h", speed);
-  uint8_t txtSpeed[64] = {0x00, 0x10, 0x00, 0x40,
-                          0x00, 0x02, 0x0F}; // X=16, Y=64
-  size_t lenSpeed = strlen(buffer);
-  memcpy(&txtSpeed[7], buffer, lenSpeed);
-  txtSpeed[7 + lenSpeed] = '\0';
-  sendCommand(0x37, txtSpeed, 7 + lenSpeed + 1);
+  // Affichage Latitude (Ligne 1) - Cropped to 6 chars total
+  snprintf(buffer, 7, "%-6.6s", std::to_string(lat).c_str());
+  uint8_t txtLat[64] = {0x00, 0x10, 0x00, 0x40, 0x00, 0x02, 0x0F};
+  size_t lenLat = strlen(buffer);
+  memcpy(&txtLat[7], buffer, lenLat);
+  txtLat[7 + lenLat] = '\0';
+  sendCommand(0x37, txtLat, 7 + lenLat + 1);
 
   vTaskDelay(pdMS_TO_TICKS(50));
 
-  // Affichage des coordonnées
-  snprintf(buffer, sizeof(buffer), "%.4f, %.4f", lat, lon);
-  uint8_t txtCoords[64] = {
-      0x00, 0x10, 0x00, 0x80,
-      0x00, 0x01, 0x0F}; // X=16, Y=128, Font=1 (plus petite)
-  size_t lenCoords = strlen(buffer);
-  memcpy(&txtCoords[7], buffer, lenCoords);
-  txtCoords[7 + lenCoords] = '\0';
-  sendCommand(0x37, txtCoords, 7 + lenCoords + 1);
+  // Affichage Longitude (Ligne 2) - Cropped to 6 chars total
+  snprintf(buffer, 7, "%-6.6s", std::to_string(lon).c_str());
+  uint8_t txtLon[64] = {0x00, 0x10, 0x00, 0x80, 0x00, 0x02, 0x0F};
+  size_t lenLon = strlen(buffer);
+  memcpy(&txtLon[7], buffer, lenLon);
+  txtLon[7 + lenLon] = '\0';
+  sendCommand(0x37, txtLon, 7 + lenLon + 1);
 }
