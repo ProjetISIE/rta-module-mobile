@@ -16,8 +16,8 @@ static constexpr std::string_view TAG = "RTA";
 // Instance globale des lunettes ActiveLook
 ActiveLook myGlasses;
 
-// Définition des services GATT exportée depuis le fichier C
-extern "C" const struct ble_gatt_svc_def gps_gatt_svcs[];
+// Définition des services GATT exportée depuis le fichier C++
+extern "C" struct ble_gatt_svc_def gps_gatt_svcs[];
 
 // Fonction de synchronisation combinée serveur/client BLE
 extern "C" void combined_on_sync() {

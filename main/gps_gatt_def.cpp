@@ -36,7 +36,7 @@ static const struct ble_gatt_dsc_def gatt_svr_dscs[] = {
      .att_flags = BLE_ATT_F_READ,
      .access_cb = gatt_svr_dsc_access,
      .arg = nullptr},
-    {nullptr} // Sentinelle
+    {} // Sentinelle
 };
 
 // Définition des caractéristiques
@@ -48,16 +48,16 @@ static const struct ble_gatt_chr_def gatt_svr_chrs[] = {
      .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_NOTIFY,
      .min_key_size = 0,
      .val_handle = &gatt_svr_chr_spd_val_handle},
-    {nullptr} // Sentinelle
+    {} // Sentinelle
 };
 
 // Définition finale des services
-const struct ble_gatt_svc_def gps_gatt_svcs[] = {
+struct ble_gatt_svc_def gps_gatt_svcs[] = {
     {.type = BLE_GATT_SVC_TYPE_PRIMARY,
      .uuid = &gatt_svr_svc_uuid.u,
      .includes = nullptr,
      .characteristics = const_cast<struct ble_gatt_chr_def *>(gatt_svr_chrs)},
-    {0} // Sentinelle
+    {} // Sentinelle
 };
 
 static int gatt_svr_chr_access(uint16_t, uint16_t,
