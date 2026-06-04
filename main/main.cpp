@@ -37,6 +37,7 @@ struct DisplayState {
 
 // GATT services defined in gps_gatt_def.cpp
 extern "C" struct ble_gatt_svc_def gpsGattSvcs[];
+extern "C" float gattReceivedDistance;
 
 void updateGlassesDisplay(AppContext& context, const rta::GpsStatus& status,
                           DisplayState& state) {
@@ -90,19 +91,23 @@ void processAndDisplayTask(void* pvParameters) {
 
         // Formatted console output via std::print (C++23)
         if (status.fix_) {
-            std::print(
-                "\r[FIX OK] Sat: {:2d} | Speed: {:6.2f} km/h | L: {:9.6f}, "
-                "{:9.6f}   ",
-                status.satellites_, status.speedKmh_, status.latitude_,
-                status.longitude_);
+            std::print("\r[FIX OK] Sat: {:2d} | Speed: {:6.2f} km/h | Dist: "
+                       "{:6.2f}m | "
+                       "L: {:9.6f}, {:9.6f}   ",
+                       status.satellites_, status.speedKmh_,
+                       gattReceivedDistance, status.latitude_,
+                       status.longitude_);
         } else {
-            std::print("\r[WAITING] No fix data parsed yet...          ");
+            std::print("\r[WAITING] Dist: {:6.2f}m | No fix data parsed yet... "
+                       "         ",
+                       gattReceivedDistance);
         }
         (void)std::fflush(stdout);
 
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
+
 } // namespace
 
 // NOLINTNEXTLINE(readability-identifier-naming)
