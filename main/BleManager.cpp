@@ -12,8 +12,8 @@ namespace rta {
 namespace {
 constexpr std::string_view tag = "RTA_BLE_MANAGER";
 static bool connection_pending = false;
+static bool connecting_to_glasses = false;
 
-// Service and Characteristic UUIDs for RTA_FIXE
 const ble_uuid128_t fixed_svc_uuid =
     BLE_UUID128_INIT(0xf0, 0xde, 0xbc, 0x9a, 0x78, 0x56, 0x34, 0x12, 0x78, 0x56,
                      0x34, 0x12, 0x78, 0x56, 0x34, 0x12);
@@ -23,6 +23,8 @@ const ble_uuid128_t fixed_chr_uuid =
                      0x34, 0x12, 0x78, 0x56, 0x34, 0x12);
 
 void handleDiscovery(struct ble_gap_event* event, BleManager* manager) {
+    if (connection_pending) return;
+
     struct ble_hs_adv_fields fields{};
     ble_hs_adv_parse_fields(&fields, event->disc.data, event->disc.length_data);
 
@@ -35,19 +37,17 @@ void handleDiscovery(struct ble_gap_event* event, BleManager* manager) {
             manager->getGlassesConnHandle() == BLE_HS_CONN_HANDLE_NONE) {
             ESP_LOGI(tag.data(), "ENGO found, connecting...");
             found = true;
+            connecting_to_glasses = true;
         } else if (name.starts_with("RTA_FIXE") &&
                    manager->getFixedConnHandle() == BLE_HS_CONN_HANDLE_NONE) {
             ESP_LOGI(tag.data(), "RTA_FIXE found, connecting...");
             found = true;
+            connecting_to_glasses = false;
         }
 
         if (found) {
-            if (connection_pending) return;
             connection_pending = true;
-
-            ble_gap_disc_cancel();
-            // ... (rc check unchanged)
-
+            // ble_gap_connect will automatically stop discovery
             struct ble_gap_conn_params conn_params{};
             conn_params.scan_itvl = 16;
             conn_params.scan_window = 16;
@@ -59,13 +59,10 @@ void handleDiscovery(struct ble_gap_event* event, BleManager* manager) {
                                      30000, &conn_params,
                                      BleManager::gapEventCallback, manager);
             if (rc != 0) {
-                ESP_LOGE(tag.data(), "Error connecting; rc=%d", rc);
-                connection_pending = false;
-                manager->startScanning();
-            } else {
-                // connection_pending will be reset in CONNECT or DISCONNECT
-                // event Actually, let's use a simpler way: just check handle.
-                // But rc=0 means it started.
+                if (rc != BLE_HS_EALREADY) {
+                    ESP_LOGE(tag.data(), "Error connecting; rc=%d", rc);
+                    connection_pending = false;
+                }
             }
         }
     }
@@ -80,12 +77,15 @@ BleManager::BleManager(ActiveLook& glasses) : glasses_(glasses) {
 }
 
 void BleManager::startScanning() noexcept {
+    if (connection_pending) return;
+
     struct ble_gap_disc_params disc_params{};
-    disc_params.passive = 0; // passive=0 means ACTIVE scan in NimBLE
-    disc_params.filter_duplicates = 1;
-    if (ble_gap_disc(BLE_OWN_ADDR_PUBLIC, BLE_HS_FOREVER, &disc_params,
-                     BleManager::gapEventCallback, this) != 0) {
-        ESP_LOGE(tag.data(), "Failed to start scanning");
+    disc_params.passive = 0;
+    disc_params.filter_duplicates = 0;
+    int rc = ble_gap_disc(BLE_OWN_ADDR_PUBLIC, BLE_HS_FOREVER, &disc_params,
+                          BleManager::gapEventCallback, this);
+    if (rc != 0 && rc != BLE_HS_EALREADY) {
+        ESP_LOGE(tag.data(), "Failed to start scanning; rc=%d", rc);
     }
 }
 
@@ -117,14 +117,15 @@ int BleManager::onFixedDiscCharacteristic(uint16_t conn_handle,
                                           void* arg) {
     auto* manager = static_cast<BleManager*>(arg);
     if (error->status == 0) {
-        manager->fixedDistChrValHandle_ = chr->val_handle;
+        if (ble_uuid_cmp(&chr->uuid.u, &fixed_chr_uuid.u) == 0) {
+            manager->fixedDistChrValHandle_ = chr->val_handle;
+        }
         return 0;
     }
     if (error->status == BLE_HS_EDONE) {
         if (manager->fixedDistChrValHandle_ != 0) {
-            ESP_LOGI(tag.data(),
-                     "Subscribing to RTA_FIXE distance notifications");
-            uint8_t value[2] = {0x01, 0x00}; // Enable notifications
+            ESP_LOGI(tag.data(), "Subscribing to RTA_FIXE notifications");
+            uint8_t value[2] = {0x01, 0x00};
             ble_gattc_write_flat(conn_handle,
                                  manager->fixedDistChrValHandle_ + 1, value,
                                  sizeof(value), nullptr, nullptr);
@@ -143,10 +144,11 @@ int BleManager::gapEventCallback(struct ble_gap_event* event, void* arg) {
     case BLE_GAP_EVENT_CONNECT:
         connection_pending = false;
         if (event->connect.status == 0) {
-            if (manager->glassesConnHandle_ == BLE_HS_CONN_HANDLE_NONE) {
+            if (connecting_to_glasses) {
                 ESP_LOGI(tag.data(), "Connected to glasses");
                 manager->glassesConnHandle_ = event->connect.conn_handle;
-                vTaskDelay(pdMS_TO_TICKS(1500));
+                // Move initialization to a safe place if possible,
+                // but for now just call it (ActiveLook should handle handles)
                 manager->glasses_.initializeDisplay(event->connect.conn_handle);
             } else {
                 ESP_LOGI(tag.data(), "Connected to RTA_FIXE");
@@ -156,14 +158,13 @@ int BleManager::gapEventCallback(struct ble_gap_event* event, void* arg) {
                     BleManager::onFixedDiscService, manager);
             }
 
-            // Restart scanning if we are still missing one device
+            // Re-start scan if needed after a small delay to avoid congestion
             if (manager->glassesConnHandle_ == BLE_HS_CONN_HANDLE_NONE ||
                 manager->fixedConnHandle_ == BLE_HS_CONN_HANDLE_NONE) {
-                ESP_LOGI(tag.data(), "One device missing, restarting scan...");
                 manager->startScanning();
             }
         } else {
-            ESP_LOGE(tag.data(), "Connection failed; status=%d",
+            ESP_LOGE(tag.data(), "Connect failed; status=%d",
                      event->connect.status);
             manager->startScanning();
         }
@@ -180,13 +181,16 @@ int BleManager::gapEventCallback(struct ble_gap_event* event, void* arg) {
         break;
 
     case BLE_GAP_EVENT_DISCONNECT:
+        connection_pending = false;
         if (event->disconnect.conn.conn_handle == manager->glassesConnHandle_) {
-            ESP_LOGI(tag.data(), "Disconnected from glasses");
+            ESP_LOGI(tag.data(), "Disconnected from glasses; reason=%d",
+                     event->disconnect.reason);
             manager->glassesConnHandle_ = BLE_HS_CONN_HANDLE_NONE;
             manager->glasses_.disconnect();
         } else if (event->disconnect.conn.conn_handle ==
                    manager->fixedConnHandle_) {
-            ESP_LOGI(tag.data(), "Disconnected from RTA_FIXE");
+            ESP_LOGI(tag.data(), "Disconnected from RTA_FIXE; reason=%d",
+                     event->disconnect.reason);
             manager->fixedConnHandle_ = BLE_HS_CONN_HANDLE_NONE;
             manager->fixedDistChrValHandle_ = 0;
         }

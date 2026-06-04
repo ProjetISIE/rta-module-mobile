@@ -10,6 +10,7 @@ Checks: >
   portability-*,
   misc-*,
   clang-analyzer-*,
+  -readability-function-cognitive-complexity,
   -cppcoreguidelines-pro-bounds-pointer-arithmetic,
   -cppcoreguidelines-pro-type-reinterpret-cast,
   -hicpp-no-assembler,
