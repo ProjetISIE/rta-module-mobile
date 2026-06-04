@@ -11,6 +11,7 @@ namespace rta {
 
 namespace {
 constexpr std::string_view tag = "RTA_BLE_MANAGER";
+static bool connection_pending = false;
 
 // Service and Characteristic UUIDs for RTA_FIXE
 const ble_uuid128_t fixed_svc_uuid =
@@ -34,13 +35,19 @@ void handleDiscovery(struct ble_gap_event* event, BleManager* manager) {
             manager->getGlassesConnHandle() == BLE_HS_CONN_HANDLE_NONE) {
             ESP_LOGI(tag.data(), "ENGO found, connecting...");
             found = true;
-        } else if (name == "RTA_FIXE" &&
+        } else if (name.starts_with("RTA_FIXE") &&
                    manager->getFixedConnHandle() == BLE_HS_CONN_HANDLE_NONE) {
             ESP_LOGI(tag.data(), "RTA_FIXE found, connecting...");
             found = true;
         }
 
         if (found) {
+            if (connection_pending) return;
+            connection_pending = true;
+
+            ble_gap_disc_cancel();
+            // ... (rc check unchanged)
+
             struct ble_gap_conn_params conn_params{};
             conn_params.scan_itvl = 16;
             conn_params.scan_window = 16;
@@ -48,10 +55,17 @@ void handleDiscovery(struct ble_gap_event* event, BleManager* manager) {
             conn_params.itvl_max = 40;
             conn_params.supervision_timeout = 500;
 
-            if (ble_gap_connect(BLE_OWN_ADDR_PUBLIC, &event->disc.addr, 30000,
-                                &conn_params, BleManager::gapEventCallback,
-                                manager) != 0) {
-                ESP_LOGE(tag.data(), "Error connecting");
+            int rc = ble_gap_connect(BLE_OWN_ADDR_PUBLIC, &event->disc.addr,
+                                     30000, &conn_params,
+                                     BleManager::gapEventCallback, manager);
+            if (rc != 0) {
+                ESP_LOGE(tag.data(), "Error connecting; rc=%d", rc);
+                connection_pending = false;
+                manager->startScanning();
+            } else {
+                // connection_pending will be reset in CONNECT or DISCONNECT
+                // event Actually, let's use a simpler way: just check handle.
+                // But rc=0 means it started.
             }
         }
     }
@@ -67,9 +81,12 @@ BleManager::BleManager(ActiveLook& glasses) : glasses_(glasses) {
 
 void BleManager::startScanning() noexcept {
     struct ble_gap_disc_params disc_params{};
-    disc_params.passive = 1;
-    ble_gap_disc(BLE_OWN_ADDR_PUBLIC, BLE_HS_FOREVER, &disc_params,
-                 BleManager::gapEventCallback, this);
+    disc_params.passive = 0; // passive=0 means ACTIVE scan in NimBLE
+    disc_params.filter_duplicates = 1;
+    if (ble_gap_disc(BLE_OWN_ADDR_PUBLIC, BLE_HS_FOREVER, &disc_params,
+                     BleManager::gapEventCallback, this) != 0) {
+        ESP_LOGE(tag.data(), "Failed to start scanning");
+    }
 }
 
 int BleManager::onFixedDiscService(uint16_t conn_handle,
@@ -124,22 +141,8 @@ int BleManager::gapEventCallback(struct ble_gap_event* event, void* arg) {
     case BLE_GAP_EVENT_DISC: handleDiscovery(event, manager); break;
 
     case BLE_GAP_EVENT_CONNECT:
+        connection_pending = false;
         if (event->connect.status == 0) {
-            // Check if it's the fixed module or glasses
-            // For simplicity, we use the name during discovery to tag,
-            // but here we can check peer address or just rely on GATT discovery
-            // We'll try to discover service to identify
-            ble_gattc_disc_svc_by_uuid(event->connect.conn_handle,
-                                       &fixed_svc_uuid.u,
-                                       BleManager::onFixedDiscService, manager);
-
-            // If it's glasses, manager will handle via onFixedDiscService
-            // failure or simply time out Better: glasses handle is usually the
-            // first one or we track address. Let's assume for now any
-            // connection that doesn't have the fixed service is glasses.
-            // Simplified: first connect is glasses, second is fixed (or vice
-            // versa) Actual logic: glasses connect triggers initializeDisplay.
-            // We'll check if glasses handle is empty.
             if (manager->glassesConnHandle_ == BLE_HS_CONN_HANDLE_NONE) {
                 ESP_LOGI(tag.data(), "Connected to glasses");
                 manager->glassesConnHandle_ = event->connect.conn_handle;
@@ -148,6 +151,16 @@ int BleManager::gapEventCallback(struct ble_gap_event* event, void* arg) {
             } else {
                 ESP_LOGI(tag.data(), "Connected to RTA_FIXE");
                 manager->fixedConnHandle_ = event->connect.conn_handle;
+                ble_gattc_disc_svc_by_uuid(
+                    manager->fixedConnHandle_, &fixed_svc_uuid.u,
+                    BleManager::onFixedDiscService, manager);
+            }
+
+            // Restart scanning if we are still missing one device
+            if (manager->glassesConnHandle_ == BLE_HS_CONN_HANDLE_NONE ||
+                manager->fixedConnHandle_ == BLE_HS_CONN_HANDLE_NONE) {
+                ESP_LOGI(tag.data(), "One device missing, restarting scan...");
+                manager->startScanning();
             }
         } else {
             ESP_LOGE(tag.data(), "Connection failed; status=%d",
