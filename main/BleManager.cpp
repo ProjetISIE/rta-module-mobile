@@ -15,12 +15,12 @@ static bool connection_pending = false;
 static bool connecting_to_glasses = false;
 
 const ble_uuid128_t fixed_svc_uuid =
-    BLE_UUID128_INIT(0xf0, 0xde, 0xbc, 0x9a, 0x78, 0x56, 0x34, 0x12, 0x78, 0x56,
-                     0x34, 0x12, 0x78, 0x56, 0x34, 0x12);
+    BLE_UUID128_INIT(0xf0, 0xde, 0xbc, 0x9a, 0x78, 0x56, 0x34, 0x12, 0x34, 0x12,
+                     0x78, 0x56, 0x34, 0x12, 0x78, 0x56);
 
 const ble_uuid128_t fixed_chr_uuid =
-    BLE_UUID128_INIT(0xf1, 0xde, 0xbc, 0x9a, 0x78, 0x56, 0x34, 0x12, 0x78, 0x56,
-                     0x34, 0x12, 0x78, 0x56, 0x34, 0x12);
+    BLE_UUID128_INIT(0xf1, 0xde, 0xbc, 0x9a, 0x78, 0x56, 0x34, 0x12, 0x34, 0x12,
+                     0x78, 0x56, 0x34, 0x12, 0x78, 0x56);
 
 void handleDiscovery(struct ble_gap_event* event, BleManager* manager) {
     if (connection_pending) return;
@@ -173,9 +173,16 @@ int BleManager::gapEventCallback(struct ble_gap_event* event, void* arg) {
     case BLE_GAP_EVENT_NOTIFY_RX:
         if (event->notify_rx.conn_handle == manager->fixedConnHandle_ &&
             event->notify_rx.attr_handle == manager->fixedDistChrValHandle_) {
-            if (OS_MBUF_PKTLEN(event->notify_rx.om) == sizeof(float)) {
-                ble_hs_mbuf_to_flat(event->notify_rx.om, &gattReceivedDistance,
-                                    sizeof(float), nullptr);
+            if (OS_MBUF_PKTLEN(event->notify_rx.om) == sizeof(uint16_t)) {
+                uint16_t distRaw = 0;
+                ble_hs_mbuf_to_flat(event->notify_rx.om, &distRaw,
+                                    sizeof(uint16_t), nullptr);
+                if (distRaw == 0xFFFF) {
+                    gattReceivedDistance = -1.0F; // Sentinel/Error
+                } else {
+                    gattReceivedDistance =
+                        static_cast<float>(distRaw) / 1000.0F;
+                }
             }
         }
         break;
