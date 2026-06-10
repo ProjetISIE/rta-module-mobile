@@ -14,7 +14,7 @@ constexpr const char* tag = "RTA";
 
 class AppContext {
   public:
-    AppContext() : server_("ESP32_RTA"), manager_(glasses_) {}
+    AppContext() : server_("RTA_MOBILE"), manager_(glasses_) {}
 
     rta::ActiveLook& glasses() { return glasses_; }
     rta::BleServer& server() { return server_; }
