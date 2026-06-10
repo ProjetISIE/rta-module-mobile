@@ -70,7 +70,7 @@ void handleDiscovery(struct ble_gap_event* event, BleManager* manager) {
 } // namespace
 
 BleManager* BleManager::instance = nullptr;
-extern "C" float gattReceivedDistance;
+extern "C" uint16_t gattReceivedDistance;
 
 BleManager::BleManager(ActiveLook& glasses) : glasses_(glasses) {
     instance = this;
@@ -174,15 +174,8 @@ int BleManager::gapEventCallback(struct ble_gap_event* event, void* arg) {
         if (event->notify_rx.conn_handle == manager->fixedConnHandle_ &&
             event->notify_rx.attr_handle == manager->fixedDistChrValHandle_) {
             if (OS_MBUF_PKTLEN(event->notify_rx.om) == sizeof(uint16_t)) {
-                uint16_t distRaw = 0;
-                ble_hs_mbuf_to_flat(event->notify_rx.om, &distRaw,
+                ble_hs_mbuf_to_flat(event->notify_rx.om, &gattReceivedDistance,
                                     sizeof(uint16_t), nullptr);
-                if (distRaw == 0xFFFF) {
-                    gattReceivedDistance = -1.0F; // Sentinel/Error
-                } else {
-                    gattReceivedDistance =
-                        static_cast<float>(distRaw) / 1000.0F;
-                }
             }
         }
         break;

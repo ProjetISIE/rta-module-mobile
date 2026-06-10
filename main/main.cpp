@@ -37,7 +37,7 @@ struct DisplayState {
 
 // GATT services defined in gps_gatt_def.cpp
 extern "C" struct ble_gatt_svc_def gpsGattSvcs[];
-extern "C" float gattReceivedDistance;
+extern "C" uint16_t gattReceivedDistance;
 
 void updateGlassesDisplay(AppContext& context, const rta::GpsStatus& status,
                           DisplayState& state) {
@@ -91,16 +91,32 @@ void processAndDisplayTask(void* pvParameters) {
 
         // Formatted console output via std::print (C++23)
         if (status.fix_) {
-            std::print("\r[FIX OK] Sat: {:2d} | Speed: {:6.2f} km/h | Dist: "
-                       "{:6.2f}m | "
-                       "L: {:9.6f}, {:9.6f}   ",
-                       status.satellites_, status.speedKmh_,
-                       gattReceivedDistance, status.latitude_,
-                       status.longitude_);
+            if (gattReceivedDistance == 0xFFFF) {
+                std::print(
+                    "\r[FIX OK] Sat: {:2d} | Speed: {:6.2f} km/h | Dist: "
+                    "--- | "
+                    "L: {:9.6f}, {:9.6f}   ",
+                    status.satellites_, status.speedKmh_, status.latitude_,
+                    status.longitude_);
+            } else {
+                std::print(
+                    "\r[FIX OK] Sat: {:2d} | Speed: {:6.2f} km/h | Dist: "
+                    "{:6.2f}m | "
+                    "L: {:9.6f}, {:9.6f}   ",
+                    status.satellites_, status.speedKmh_,
+                    static_cast<float>(gattReceivedDistance) / 1000.0F,
+                    status.latitude_, status.longitude_);
+            }
         } else {
-            std::print("\r[WAITING] Dist: {:6.2f}m | No fix data parsed yet... "
-                       "         ",
-                       gattReceivedDistance);
+            if (gattReceivedDistance == 0xFFFF) {
+                std::print("\r[WAITING] Dist: --- | No fix data parsed yet... "
+                           "         ");
+            } else {
+                std::print(
+                    "\r[WAITING] Dist: {:6.2f}m | No fix data parsed yet... "
+                    "         ",
+                    static_cast<float>(gattReceivedDistance) / 1000.0F);
+            }
         }
         (void)std::fflush(stdout);
 
