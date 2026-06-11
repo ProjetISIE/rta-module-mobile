@@ -47,7 +47,21 @@ void handleDiscovery(struct ble_gap_event* event, BleManager* manager) {
 
         if (found) {
             connection_pending = true;
-            // ble_gap_connect will automatically stop discovery
+
+            // Stop scanning explicitly before connecting to avoid EBUSY (rc=15)
+            // on some NimBLE versions/configurations
+            ble_gap_disc_cancel();
+
+            // Infer the best own address type (public or random)
+            uint8_t own_addr_type;
+            int rc = ble_hs_id_infer_auto(0, &own_addr_type);
+            if (rc != 0) {
+                ESP_LOGE(tag.data(), "Error inferring addr type; rc=%d", rc);
+                connection_pending = false;
+                manager->startScanning();
+                return;
+            }
+
             struct ble_gap_conn_params conn_params{};
             conn_params.scan_itvl = 16;
             conn_params.scan_window = 16;
@@ -55,13 +69,14 @@ void handleDiscovery(struct ble_gap_event* event, BleManager* manager) {
             conn_params.itvl_max = 40;
             conn_params.supervision_timeout = 500;
 
-            int rc = ble_gap_connect(BLE_OWN_ADDR_PUBLIC, &event->disc.addr,
-                                     30000, &conn_params,
-                                     BleManager::gapEventCallback, manager);
+            rc = ble_gap_connect(own_addr_type, &event->disc.addr, 30000,
+                                 &conn_params, BleManager::gapEventCallback,
+                                 manager);
             if (rc != 0) {
                 if (rc != BLE_HS_EALREADY) {
                     ESP_LOGE(tag.data(), "Error connecting; rc=%d", rc);
                     connection_pending = false;
+                    manager->startScanning(); // Restart if failed
                 }
             }
         }
