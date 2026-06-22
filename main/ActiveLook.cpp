@@ -119,7 +119,7 @@ void ActiveLook::displaySpeedAndDistance(std::optional<double> speedKmh,
         return payload;
     };
 
-    std::string speedStr = formatValue(speedKmh, 4);
+    std::string speedStr = formatValue(speedKmh, 3);
     if (speedStr != "---") {
         speedStr += "km/h";
     }
