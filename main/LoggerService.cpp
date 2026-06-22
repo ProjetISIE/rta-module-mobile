@@ -235,6 +235,7 @@ void LoggerService::saveActiveFileIndex() {
 
 void LoggerService::dumpLogs() {
     std::scoped_lock lock(mutex_);
+    isDumping_ = true;
 
     // 1. Temporarily disable logging to avoid log pollution
     esp_log_level_set("*", ESP_LOG_NONE);
@@ -270,6 +271,7 @@ void LoggerService::dumpLogs() {
     // 4. Restore log level to the default compiled level
     esp_log_level_set("*",
                       static_cast<esp_log_level_t>(CONFIG_LOG_DEFAULT_LEVEL));
+    isDumping_ = false;
 }
 
 } // namespace rta

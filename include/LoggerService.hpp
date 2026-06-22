@@ -22,6 +22,9 @@ class LoggerService {
     /// Dumps the logs from both files to standard output.
     void dumpLogs();
 
+    /// Returns true if a dump is currently in progress.
+    [[nodiscard]] bool isDumping() const { return isDumping_; }
+
   private:
     LoggerService() = default;
 
@@ -37,6 +40,7 @@ class LoggerService {
     uint8_t activeFileIdx_{0};
     uint32_t linesWritten_{0};
     bool isLoggingActive_{false};
+    bool isDumping_{false};
 };
 
 } // namespace rta
