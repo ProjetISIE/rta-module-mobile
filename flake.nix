@@ -60,7 +60,8 @@
                   mkspiffs-presets.esp-idf
                   ninja # Build
                   # pkg-config # Find libraries
-                  tio # Serial
+                  # tio # Serial
+                  platformio # Tools
                   valgrind # Debugging and profiling
                   (pkgs.writeShellScriptBin "setup" "cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -GNinja -B build")
                   (pkgs.writeShellScriptBin "lint" "clang-tidy -p build main/*.cpp")

@@ -1,5 +1,6 @@
 #include "LoggerService.hpp"
 #include "GpsService.hpp"
+#include "driver/uart.h"
 #include "esp_log.h"
 #include "esp_spiffs.h"
 #include "esp_timer.h"
@@ -104,20 +105,59 @@ void LoggerService::loggerTask(void* arg) {
 
 void LoggerService::consoleTask(void* arg) {
     auto* self = static_cast<LoggerService*>(arg);
+
+    // Install UART driver on UART0 if not already installed.
+    // If a driver is already installed, this will fail safely or do nothing.
+    uart_config_t uart_config = {
+        .baud_rate = 115200,
+        .data_bits = UART_DATA_8_BITS,
+        .parity = UART_PARITY_DISABLE,
+        .stop_bits = UART_STOP_BITS_1,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+        .rx_flow_ctrl_thresh = 122,
+        .source_clk = UART_SCLK_DEFAULT,
+    };
+    uart_driver_install(UART_NUM_0, 256, 256, 0, nullptr, 0);
+    uart_param_config(UART_NUM_0, &uart_config);
+
     char line[64];
+    int line_len = 0;
+
     while (true) {
-        // Read from stdin. fgets is blocking.
-        if (fgets(line, sizeof(line), stdin) != nullptr) {
-            std::string_view command(line);
-            while (!command.empty() &&
-                   (command.back() == '\n' || command.back() == '\r')) {
-                command.remove_suffix(1);
-            }
-            if (command == "DUMP") {
-                self->dumpLogs();
+        uint8_t byte;
+        int read_bytes =
+            uart_read_bytes(UART_NUM_0, &byte, 1, pdMS_TO_TICKS(50));
+        if (read_bytes > 0) {
+            // Echo character back to screen
+            uart_write_bytes(UART_NUM_0, &byte, 1);
+
+            if (byte == '\r' || byte == '\n') {
+                // Echo carriage return and newline
+                const char nl_seq[] = {'\r', '\n'};
+                uart_write_bytes(UART_NUM_0, nl_seq, sizeof(nl_seq));
+
+                line[line_len] = '\0';
+                if (line_len > 0) {
+                    std::string_view command(line);
+                    if (command == "DUMP") {
+                        self->dumpLogs();
+                    }
+                }
+                line_len = 0;
+            } else if (line_len < static_cast<int>(sizeof(line)) - 1) {
+                if (byte == 8 || byte == 127) {
+                    if (line_len > 0) {
+                        line_len--;
+                        // Erase character from user terminal
+                        const char bs_seq[] = {8, ' ', 8};
+                        uart_write_bytes(UART_NUM_0, bs_seq, sizeof(bs_seq));
+                    }
+                } else {
+                    line[line_len++] = static_cast<char>(byte);
+                }
             }
         }
-        vTaskDelay(pdMS_TO_TICKS(100));
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
     vTaskDelete(nullptr);
 }
