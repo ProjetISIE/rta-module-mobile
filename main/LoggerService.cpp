@@ -246,8 +246,13 @@ void LoggerService::dumpLogs() {
         FILE* f = fopen(filepath, "r");
         if (f != nullptr) {
             char buf[128];
+            int lineCount = 0;
             while (fgets(buf, sizeof(buf), f) != nullptr) {
                 printf("%s", buf);
+                lineCount++;
+                if (lineCount % 100 == 0) {
+                    vTaskDelay(1); // Yield to let Idle Task feed the watchdog
+                }
             }
             fclose(f);
         }
