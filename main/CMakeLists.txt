@@ -6,6 +6,7 @@ idf_component_register(
   "gps_gatt_def.cpp"
   "ActiveLook.cpp"
   "BleManager.cpp"
+  "LoggerService.cpp"
   INCLUDE_DIRS
   "../include"
   REQUIRES
@@ -13,4 +14,5 @@ idf_component_register(
   nvs_flash
   esp_driver_uart
   log
-  freertos)
+  freertos
+  spiffs)

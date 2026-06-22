@@ -2,6 +2,7 @@
 #include "BleManager.hpp"
 #include "BleServer.hpp"
 #include "GpsService.hpp"
+#include "LoggerService.hpp"
 #include "esp_log.h"
 #include "freertos/task.h"
 #include "host/ble_gatt.h" // For ble_gatt_svc_def
@@ -156,6 +157,10 @@ extern "C" void app_main() {
 
     // Start GPS Service
     rta::GpsService::instance().start();
+
+    // Start Logger Service and Console Reader
+    rta::LoggerService::instance().start();
+    rta::LoggerService::instance().startConsoleReader();
 
     // Register services and start BLE stack
     if (context->server().registerServices(gpsGattSvcs) != 0) {
