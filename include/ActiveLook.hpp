@@ -6,7 +6,6 @@
 #include <optional>
 #include <span>
 #include <string_view>
-#include <vector>
 
 namespace rta {
 
@@ -71,11 +70,12 @@ class ActiveLook {
     void displayGpsWait();
 
     /**
-     * @brief Displays GPS coordinates on the screen.
-     * @param lat Latitude.
-     * @param lon Longitude.
+     * @brief Displays current speed and distance on the screen.
+     * @param speedKmh Current speed in km/h.
+     * @param distanceM Current distance in meters, std::nullopt if unavailable.
      */
-    void displayCoordinates(double lat, double lon);
+    void displaySpeedAndDistance(std::optional<double> speedKmh,
+                                 std::optional<double> distanceM);
 
   private:
     std::optional<uint16_t> connectionHandle_;

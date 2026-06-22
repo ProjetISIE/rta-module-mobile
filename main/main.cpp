@@ -7,6 +7,7 @@
 #include "host/ble_gatt.h" // For ble_gatt_svc_def
 #include <cstdio>
 #include <memory>
+#include <optional>
 #include <print>
 
 namespace {
@@ -29,8 +30,8 @@ class AppContext {
 struct DisplayState {
     bool wasConnected_{false};
     bool lastFix_{false};
-    double lastLat_{0.0};
-    double lastLon_{0.0};
+    float lastSpeedKmh_{0.0f};
+    uint16_t lastDistance_{0xFFFF};
     bool forceUpdate_{false};
     int rtaOkTimer_{0};
 };
@@ -54,20 +55,28 @@ void updateGlassesDisplay(AppContext& context, const rta::GpsStatus& status,
             state.rtaOkTimer_--;
         } else {
             const bool fixChanged = (status.fix_ != state.lastFix_);
-            const bool posChanged =
-                status.fix_ && (status.latitude_ != state.lastLat_ ||
-                                status.longitude_ != state.lastLon_);
+            const bool speedChanged =
+                status.fix_ && (status.speedKmh_ != state.lastSpeedKmh_);
+            const bool distChanged =
+                (gattReceivedDistance != state.lastDistance_);
 
-            if (state.forceUpdate_ || fixChanged || posChanged) {
+            if (state.forceUpdate_ || fixChanged || speedChanged ||
+                distChanged) {
+                std::optional<double> speedVal;
                 if (status.fix_) {
-                    context.glasses().displayCoordinates(status.latitude_,
-                                                         status.longitude_);
-                    state.lastLat_ = status.latitude_;
-                    state.lastLon_ = status.longitude_;
-                } else {
-                    context.glasses().displayGpsWait();
+                    speedVal = status.speedKmh_;
                 }
+                std::optional<double> distVal;
+                if (gattReceivedDistance != 0xFFFF) {
+                    distVal =
+                        static_cast<double>(gattReceivedDistance) / 1000.0;
+                }
+
+                context.glasses().displaySpeedAndDistance(speedVal, distVal);
+
                 state.lastFix_ = status.fix_;
+                state.lastSpeedKmh_ = status.fix_ ? status.speedKmh_ : 0.0f;
+                state.lastDistance_ = gattReceivedDistance;
                 state.forceUpdate_ = false;
             }
         }
@@ -75,6 +84,8 @@ void updateGlassesDisplay(AppContext& context, const rta::GpsStatus& status,
         state.wasConnected_ = false;
         state.rtaOkTimer_ = 0;
         state.lastFix_ = false;
+        state.lastSpeedKmh_ = 0.0f;
+        state.lastDistance_ = 0xFFFF;
         state.forceUpdate_ = false;
     }
 }

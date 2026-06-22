@@ -2,9 +2,11 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "host/ble_hs.h"
+#include <algorithm>
 #include <array>
 #include <format>
 #include <string>
+#include <vector>
 
 namespace rta {
 
@@ -75,7 +77,8 @@ void ActiveLook::displayNumber(int value) {
 
 void ActiveLook::displayGpsWait() { displayText("Wait..."); }
 
-void ActiveLook::displayCoordinates(double lat, double lon) {
+void ActiveLook::displaySpeedAndDistance(std::optional<double> speedKmh,
+                                         std::optional<double> distanceM) {
     if (!connectionHandle_) {
         return;
     }
@@ -83,12 +86,28 @@ void ActiveLook::displayCoordinates(double lat, double lon) {
     sendCommand(Command::CLEAR);
     vTaskDelay(pdMS_TO_TICKS(50));
 
-    auto formatCoord = [](double val, uint8_t yPos) {
-        auto formatted = std::format("{:.4f}", val);
-        if (formatted.length() > 6) {
-            formatted.resize(6);
+    auto formatValue = [](std::optional<double> val) {
+        if (!val.has_value() || *val < 0.0) {
+            return std::string("---");
         }
+        double value = *val;
+        std::string formatted = std::format("{:.2f}", value);
+        std::replace(formatted.begin(), formatted.end(), '.', ',');
+        if (formatted.length() > 5) {
+            formatted = std::format("{:.1f}", value);
+            std::replace(formatted.begin(), formatted.end(), '.', ',');
+        }
+        if (formatted.length() > 5) {
+            formatted = std::format("{:.0f}", value);
+            std::replace(formatted.begin(), formatted.end(), '.', ',');
+        }
+        if (formatted.length() > 5) {
+            formatted.resize(5);
+        }
+        return formatted;
+    };
 
+    auto buildPayload = [](const std::string& formatted, uint8_t yPos) {
         std::vector<uint8_t> payload = {0x00, 0x99, 0x00, yPos,
                                         0x04, 0x02, 0x0F};
         payload.reserve(payload.size() + formatted.length() + 1);
@@ -100,9 +119,9 @@ void ActiveLook::displayCoordinates(double lat, double lon) {
         return payload;
     };
 
-    sendCommand(Command::LUMA_TEXT, formatCoord(lat, 0x40));
+    sendCommand(Command::LUMA_TEXT, buildPayload(formatValue(speedKmh), 0x40));
     vTaskDelay(pdMS_TO_TICKS(50));
-    sendCommand(Command::LUMA_TEXT, formatCoord(lon, 0x80));
+    sendCommand(Command::LUMA_TEXT, buildPayload(formatValue(distanceM), 0x80));
 }
 
 } // namespace rta
