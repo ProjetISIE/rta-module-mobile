@@ -1,6 +1,7 @@
 #include "ActiveLook.hpp"
 #include "BleManager.hpp"
 #include "BleServer.hpp"
+#include "EspNowMobile.hpp"
 #include "GpsService.hpp"
 #include "LoggerService.hpp"
 #include "esp_log.h"
@@ -186,6 +187,8 @@ extern "C" void app_main() {
         ESP_LOGE(tag, "Failed to start BLE stack");
         return;
     }
+
+    rta::espnow::init();
 
     // Create display task
     xTaskCreate(processAndDisplayTask, "display_task", 4096, context.get(), 5,

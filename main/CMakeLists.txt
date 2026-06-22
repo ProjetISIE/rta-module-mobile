@@ -7,6 +7,7 @@ idf_component_register(
   "ActiveLook.cpp"
   "BleManager.cpp"
   "LoggerService.cpp"
+  "EspNowMobile.cpp"
   INCLUDE_DIRS
   "../include"
   REQUIRES
@@ -15,4 +16,7 @@ idf_component_register(
   esp_driver_uart
   log
   freertos
-  spiffs)
+  spiffs
+  esp_wifi
+  esp_netif
+  esp_event)
