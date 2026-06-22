@@ -55,13 +55,12 @@ void LoggerService::start() {
     saveActiveFileIndex();
     linesWritten_ = 0;
 
-    // 4. Open new active file in truncate mode and write CSV header
+    // 4. Open new active file in truncate mode to clear it
     char filename[32];
     snprintf(filename, sizeof(filename), "/spiffs/session_%d.csv",
              activeFileIdx_);
     FILE* f = fopen(filename, "w");
     if (f != nullptr) {
-        fprintf(f, "timestamp_ms,speed_kmh,distance_m\n");
         fclose(f);
     }
 
@@ -199,7 +198,6 @@ void LoggerService::checkAndRotateFile() {
                  activeFileIdx_);
         FILE* f = fopen(filename, "w");
         if (f != nullptr) {
-            fprintf(f, "timestamp_ms,speed_kmh,distance_m\n");
             fclose(f);
         }
         ESP_LOGI(tag.data(), "Session rotated. Active file: %s", filename);
@@ -240,8 +238,9 @@ void LoggerService::dumpLogs() {
     // 1. Temporarily disable logging to avoid log pollution
     esp_log_level_set("*", ESP_LOG_NONE);
 
-    // 2. Print start marker
+    // 2. Print start marker and CSV header
     printf("\n===START_DUMP===\n");
+    printf("timestamp_ms,speed_kmh,distance_m\n");
 
     auto dumpFile = [](const char* filepath) {
         FILE* f = fopen(filepath, "r");
