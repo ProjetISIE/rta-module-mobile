@@ -39,7 +39,7 @@ void LoggerService::start() {
     ESP_LOGI(tag.data(), "Initializing SPIFFS...");
     esp_vfs_spiffs_conf_t conf = {.base_path = "/spiffs",
                                   .partition_label = "storage",
-                                  .max_files = 5,
+                                  .max_files = 10,
                                   .format_if_mount_failed = true};
     esp_err_t ret = esp_vfs_spiffs_register(&conf);
     if (ret != ESP_OK) {
@@ -48,24 +48,19 @@ void LoggerService::start() {
         return;
     }
 
-    // 3. Load active file index and verify size
+    // 3. Load active file index and increment for the new boot session
     loadActiveFileIndex();
-    const char* filename =
-        (activeFileIdx_ == 0) ? "/spiffs/logs_a.csv" : "/spiffs/logs_b.csv";
-    struct stat st;
-    if (stat(filename, &st) == 0) {
-        linesWritten_ = st.st_size / 25; // Estimate
-    } else {
-        linesWritten_ = 0;
-    }
+    activeFileIdx_ = (activeFileIdx_ + 1) % 6;
+    saveActiveFileIndex();
+    linesWritten_ = 0;
 
-    // 4. Open in append mode and write session start marker
-    FILE* f = fopen(filename, "a");
+    // 4. Open new active file in truncate mode and write CSV header
+    char filename[32];
+    snprintf(filename, sizeof(filename), "/spiffs/session_%d.csv",
+             activeFileIdx_);
+    FILE* f = fopen(filename, "w");
     if (f != nullptr) {
-        if (st.st_size == 0) {
-            fprintf(f, "timestamp_ms,speed_kmh,distance_m\n");
-        }
-        fprintf(f, "# --- SESSION START ---\n");
+        fprintf(f, "timestamp_ms,speed_kmh,distance_m\n");
         fclose(f);
     }
 
@@ -74,7 +69,8 @@ void LoggerService::start() {
     // 5. Start logging task
     xTaskCreate(loggerTask, "logger_task", 4096, this, 3, nullptr);
 
-    ESP_LOGI(tag.data(), "Logger service started successfully. Active file: %s",
+    ESP_LOGI(tag.data(),
+             "Logger service started successfully. Session active file: %s",
              filename);
 }
 
@@ -131,8 +127,9 @@ void LoggerService::writeRecord(double speed, std::optional<double> distance) {
 
     checkAndRotateFile();
 
-    const char* filename =
-        (activeFileIdx_ == 0) ? "/spiffs/logs_a.csv" : "/spiffs/logs_b.csv";
+    char filename[32];
+    snprintf(filename, sizeof(filename), "/spiffs/session_%d.csv",
+             activeFileIdx_);
     FILE* f = fopen(filename, "a");
     if (f == nullptr) {
         return;
@@ -151,20 +148,21 @@ void LoggerService::writeRecord(double speed, std::optional<double> distance) {
 }
 
 void LoggerService::checkAndRotateFile() {
-    // 54000 lines is 1.5 hours of logging at 10 Hz
-    if (linesWritten_ >= 54000) {
-        activeFileIdx_ = (activeFileIdx_ == 0) ? 1 : 0;
+    // 18000 lines is 30 minutes of logging at 10 Hz
+    if (linesWritten_ >= 18000) {
+        activeFileIdx_ = (activeFileIdx_ + 1) % 6;
         saveActiveFileIndex();
         linesWritten_ = 0;
 
-        const char* filename =
-            (activeFileIdx_ == 0) ? "/spiffs/logs_a.csv" : "/spiffs/logs_b.csv";
+        char filename[32];
+        snprintf(filename, sizeof(filename), "/spiffs/session_%d.csv",
+                 activeFileIdx_);
         FILE* f = fopen(filename, "w");
         if (f != nullptr) {
             fprintf(f, "timestamp_ms,speed_kmh,distance_m\n");
             fclose(f);
         }
-        ESP_LOGI(tag.data(), "Rotated log file to: %s", filename);
+        ESP_LOGI(tag.data(), "Session rotated. Active file: %s", filename);
     }
 }
 
@@ -174,7 +172,7 @@ void LoggerService::loadActiveFileIndex() {
     if (err == ESP_OK) {
         uint8_t idx = 0;
         err = nvs_get_u8(my_handle, "active_file", &idx);
-        if (err == ESP_OK) {
+        if (err == ESP_OK && idx < 6) {
             activeFileIdx_ = idx;
         } else {
             activeFileIdx_ = 0;
@@ -215,14 +213,14 @@ void LoggerService::dumpLogs() {
         }
     };
 
-    const char* inactivePath =
-        (activeFileIdx_ == 0) ? "/spiffs/logs_b.csv" : "/spiffs/logs_a.csv";
-    const char* activePath =
-        (activeFileIdx_ == 0) ? "/spiffs/logs_a.csv" : "/spiffs/logs_b.csv";
-
-    // Dump inactive first (contains older logs), then active (newer)
-    dumpFile(inactivePath);
-    dumpFile(activePath);
+    // Dump chronologically: from activeFileIdx_ + 1 to activeFileIdx_ (modulo
+    // 6)
+    for (int i = 1; i <= 6; ++i) {
+        int idx = (activeFileIdx_ + i) % 6;
+        char filename[32];
+        snprintf(filename, sizeof(filename), "/spiffs/session_%d.csv", idx);
+        dumpFile(filename);
+    }
 
     // 3. Print end marker
     printf("===END_DUMP===\n");
