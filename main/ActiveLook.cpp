@@ -86,23 +86,23 @@ void ActiveLook::displaySpeedAndDistance(std::optional<double> speedKmh,
     sendCommand(Command::CLEAR);
     vTaskDelay(pdMS_TO_TICKS(50));
 
-    auto formatValue = [](std::optional<double> val) {
+    auto formatValue = [](std::optional<double> val, int maxLen) {
         if (!val.has_value() || *val < 0.0) {
             return std::string("---");
         }
         double value = *val;
         std::string formatted = std::format("{:.2f}", value);
         std::replace(formatted.begin(), formatted.end(), '.', ',');
-        if (formatted.length() > 5) {
+        if (formatted.length() > maxLen) {
             formatted = std::format("{:.1f}", value);
             std::replace(formatted.begin(), formatted.end(), '.', ',');
         }
-        if (formatted.length() > 5) {
+        if (formatted.length() > maxLen) {
             formatted = std::format("{:.0f}", value);
             std::replace(formatted.begin(), formatted.end(), '.', ',');
         }
-        if (formatted.length() > 5) {
-            formatted.resize(5);
+        if (formatted.length() > maxLen) {
+            formatted.resize(maxLen);
         }
         return formatted;
     };
@@ -119,9 +119,18 @@ void ActiveLook::displaySpeedAndDistance(std::optional<double> speedKmh,
         return payload;
     };
 
-    sendCommand(Command::LUMA_TEXT, buildPayload(formatValue(speedKmh), 0x40));
+    std::string speedStr = formatValue(speedKmh, 4);
+    if (speedStr != "---") {
+        speedStr += "km/h";
+    }
+    std::string distanceStr = formatValue(distanceM, 5);
+    if (distanceStr != "---") {
+        distanceStr += "m";
+    }
+
+    sendCommand(Command::LUMA_TEXT, buildPayload(speedStr, 0x40));
     vTaskDelay(pdMS_TO_TICKS(50));
-    sendCommand(Command::LUMA_TEXT, buildPayload(formatValue(distanceM), 0x80));
+    sendCommand(Command::LUMA_TEXT, buildPayload(distanceStr, 0x80));
 }
 
 } // namespace rta
