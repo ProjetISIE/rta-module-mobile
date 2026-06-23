@@ -19,7 +19,15 @@ namespace rta {
 
 namespace {
 constexpr std::string_view tag = "RTA_LOGGER";
-}
+
+#pragma pack(push, 1)
+struct LogRecord {
+    uint32_t timestamp_ms;
+    float speed_kmh;
+    uint16_t distance_mm;
+};
+#pragma pack(pop)
+} // namespace
 
 void LoggerService::start() {
     std::scoped_lock lock(mutex_);
@@ -57,9 +65,9 @@ void LoggerService::start() {
 
     // 4. Open new active file in truncate mode to clear it
     char filename[32];
-    snprintf(filename, sizeof(filename), "/spiffs/session_%d.csv",
+    snprintf(filename, sizeof(filename), "/spiffs/session_%d.bin",
              activeFileIdx_);
-    FILE* f = fopen(filename, "w");
+    FILE* f = fopen(filename, "wb");
     if (f != nullptr) {
         fclose(f);
     }
@@ -167,20 +175,23 @@ void LoggerService::writeRecord(double speed, std::optional<double> distance) {
     checkAndRotateFile();
 
     char filename[32];
-    snprintf(filename, sizeof(filename), "/spiffs/session_%d.csv",
+    snprintf(filename, sizeof(filename), "/spiffs/session_%d.bin",
              activeFileIdx_);
-    FILE* f = fopen(filename, "a");
+    FILE* f = fopen(filename, "ab");
     if (f == nullptr) {
         return;
     }
 
-    int64_t timestamp = esp_timer_get_time() / 1000;
-
+    LogRecord record;
+    record.timestamp_ms = static_cast<uint32_t>(esp_timer_get_time() / 1000);
+    record.speed_kmh = static_cast<float>(speed);
     if (distance.has_value()) {
-        fprintf(f, "%lld,%.2f,%.2f\n", (long long)timestamp, speed, *distance);
+        record.distance_mm = static_cast<uint16_t>(*distance * 1000.0);
     } else {
-        fprintf(f, "%lld,%.2f,---\n", (long long)timestamp, speed);
+        record.distance_mm = 0xFFFF;
     }
+
+    fwrite(&record, sizeof(LogRecord), 1, f);
     fclose(f);
 
     linesWritten_++;
@@ -194,9 +205,9 @@ void LoggerService::checkAndRotateFile() {
         linesWritten_ = 0;
 
         char filename[32];
-        snprintf(filename, sizeof(filename), "/spiffs/session_%d.csv",
+        snprintf(filename, sizeof(filename), "/spiffs/session_%d.bin",
                  activeFileIdx_);
-        FILE* f = fopen(filename, "w");
+        FILE* f = fopen(filename, "wb");
         if (f != nullptr) {
             fclose(f);
         }
@@ -243,12 +254,19 @@ void LoggerService::dumpLogs() {
     printf("timestamp_ms,speed_kmh,distance_m\n");
 
     auto dumpFile = [](const char* filepath) {
-        FILE* f = fopen(filepath, "r");
+        FILE* f = fopen(filepath, "rb");
         if (f != nullptr) {
-            char buf[128];
+            LogRecord record;
             int lineCount = 0;
-            while (fgets(buf, sizeof(buf), f) != nullptr) {
-                printf("%s", buf);
+            while (fread(&record, sizeof(LogRecord), 1, f) == 1) {
+                if (record.distance_mm != 0xFFFF) {
+                    printf("%lu,%.2f,%.2f\n",
+                           (unsigned long)record.timestamp_ms, record.speed_kmh,
+                           record.distance_mm / 1000.0f);
+                } else {
+                    printf("%lu,%.2f,---\n", (unsigned long)record.timestamp_ms,
+                           record.speed_kmh);
+                }
                 lineCount++;
                 if (lineCount % 100 == 0) {
                     vTaskDelay(1); // Yield to let Idle Task feed the watchdog
@@ -263,7 +281,7 @@ void LoggerService::dumpLogs() {
     for (int i = 1; i <= 6; ++i) {
         int idx = (activeFileIdx_ + i) % 6;
         char filename[32];
-        snprintf(filename, sizeof(filename), "/spiffs/session_%d.csv", idx);
+        snprintf(filename, sizeof(filename), "/spiffs/session_%d.bin", idx);
         dumpFile(filename);
     }
 
