@@ -25,6 +25,7 @@ constexpr std::string_view tag = "RTA_LOGGER";
 #pragma pack(push, 1)
 struct LogRecord {
     uint32_t timestamp_ms;
+    uint32_t utc_epoch_s;
     float speed_kmh;
     uint16_t distance_mm;
 };
@@ -111,7 +112,7 @@ void LoggerService::loggerTask(void* arg) {
             distVal = static_cast<double>(gattReceivedDistance) / 1000.0;
         }
 
-        self->writeRecord(status.fix_ ? status.speedKmh_ : 0.0, distVal);
+        self->writeRecord(status, distVal);
     }
     vTaskDelete(nullptr);
 }
@@ -175,7 +176,8 @@ void LoggerService::consoleTask(void* arg) {
     vTaskDelete(nullptr);
 }
 
-void LoggerService::writeRecord(double speed, std::optional<double> distance) {
+void LoggerService::writeRecord(const GpsStatus& status,
+                                std::optional<double> distance) {
     std::scoped_lock lock(mutex_);
 
     checkAndRotateFile();
@@ -190,7 +192,9 @@ void LoggerService::writeRecord(double speed, std::optional<double> distance) {
 
     LogRecord record;
     record.timestamp_ms = static_cast<uint32_t>(esp_timer_get_time() / 1000);
-    record.speed_kmh = static_cast<float>(speed);
+    record.utc_epoch_s = status.utcEpoch_;
+    record.speed_kmh =
+        static_cast<float>(status.fix_ ? status.speedKmh_ : 0.0F);
     if (distance.has_value()) {
         record.distance_mm = static_cast<uint16_t>(*distance * 1000.0);
     } else {
@@ -271,7 +275,7 @@ void LoggerService::dumpLogs() {
 
     // 2. Print start marker and CSV header
     printf("\n===START_DUMP===\n");
-    printf("timestamp_ms,speed_kmh,distance_m\n");
+    printf("timestamp_ms,utc_epoch_s,speed_kmh,distance_m\n");
 
     auto dumpFile = [](const char* filepath) {
         FILE* f = fopen(filepath, "rb");
@@ -280,12 +284,14 @@ void LoggerService::dumpLogs() {
             int lineCount = 0;
             while (fread(&record, sizeof(LogRecord), 1, f) == 1) {
                 if (record.distance_mm != 0xFFFF) {
-                    printf("%lu,%.2f,%.2f\n",
-                           (unsigned long)record.timestamp_ms, record.speed_kmh,
+                    printf("%lu,%lu,%.2f,%.2f\n",
+                           (unsigned long)record.timestamp_ms,
+                           (unsigned long)record.utc_epoch_s, record.speed_kmh,
                            record.distance_mm / 1000.0f);
                 } else {
-                    printf("%lu,%.2f,---\n", (unsigned long)record.timestamp_ms,
-                           record.speed_kmh);
+                    printf("%lu,%lu,%.2f,---\n",
+                           (unsigned long)record.timestamp_ms,
+                           (unsigned long)record.utc_epoch_s, record.speed_kmh);
                 }
                 lineCount++;
                 if (lineCount % 100 == 0) {

@@ -32,7 +32,7 @@ class LoggerService {
     static void loggerTask(void* arg);
     static void consoleTask(void* arg);
 
-    void writeRecord(double speed, std::optional<double> distance);
+    void writeRecord(const GpsStatus& status, std::optional<double> distance);
     void checkAndRotateFile();
     void freeUpSpaceIfNeeded();
     std::vector<uint32_t> getSessionFiles();

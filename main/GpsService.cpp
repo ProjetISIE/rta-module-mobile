@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <ctime>
 #include <numbers>
 #include <span>
 #include <vector>
@@ -54,6 +55,22 @@ double convertPositionToDecimal(nmea_position pos) {
     }
     return decimalDegrees;
 }
+
+uint32_t convertUtcTmToEpoch(const struct tm& timeInfo) {
+    int year = timeInfo.tm_year + 1900;
+    int month = timeInfo.tm_mon + 1;
+    if (month <= 2) {
+        year -= 1;
+        month += 12;
+    }
+    long days = (365L * year) + (year / 4) - (year / 100) + (year / 400);
+    days += (367L * month - 362) / 12;
+    days += timeInfo.tm_mday - 1;
+    days -= 719499L; // Days from year 0 to 1970
+
+    return static_cast<uint32_t>(days * 86400L + timeInfo.tm_hour * 3600L +
+                                 timeInfo.tm_min * 60L + timeInfo.tm_sec);
+}
 } // namespace
 
 extern "C" uint16_t gattSvrChrSpdValHandle;
@@ -83,6 +100,8 @@ void GpsService::processNmeaSentence(std::string_view sentence) {
                 status_.latitude_ = convertPositionToDecimal(rmc->latitude);
                 status_.longitude_ = convertPositionToDecimal(rmc->longitude);
                 status_.speedKmh_ = rmc->gndspd_knots * 1.852F;
+                status_.utcEpoch_ =
+                    static_cast<uint32_t>(timegm(&rmc->date_time));
 
                 if (firstFix_) {
                     lastLat_ = status_.latitude_;

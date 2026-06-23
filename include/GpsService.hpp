@@ -17,6 +17,7 @@ struct GpsStatus {
     float speedKmh_{0.0F};
     double odometerKm_{0.0};
     int satellites_{0};
+    uint32_t utcEpoch_{0};
     bool fix_{false};
 };
 /**
