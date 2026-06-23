@@ -10,8 +10,10 @@
 #include "nvs_flash.h"
 #include <algorithm>
 #include <cstdio>
+#include <dirent.h>
 #include <string_view>
 #include <sys/stat.h>
+#include <unistd.h>
 
 extern "C" uint16_t gattReceivedDistance;
 
@@ -57,15 +59,19 @@ void LoggerService::start() {
         return;
     }
 
-    // 3. Load active file index and increment for the new boot session
-    loadActiveFileIndex();
-    activeFileIdx_ = (activeFileIdx_ + 1) % 6;
-    saveActiveFileIndex();
+    // 3. Load active file index dynamically by scanning directory
+    auto files = getSessionFiles();
+    if (!files.empty()) {
+        activeFileIdx_ = files.back() + 1;
+    } else {
+        activeFileIdx_ = 0;
+    }
     linesWritten_ = 0;
 
-    // 4. Open new active file in truncate mode to clear it
+    // 4. Free up space and open new active file
+    freeUpSpaceIfNeeded();
     char filename[32];
-    snprintf(filename, sizeof(filename), "/spiffs/session_%d.bin",
+    snprintf(filename, sizeof(filename), "/spiffs/session_%u.bin",
              activeFileIdx_);
     FILE* f = fopen(filename, "wb");
     if (f != nullptr) {
@@ -175,7 +181,7 @@ void LoggerService::writeRecord(double speed, std::optional<double> distance) {
     checkAndRotateFile();
 
     char filename[32];
-    snprintf(filename, sizeof(filename), "/spiffs/session_%d.bin",
+    snprintf(filename, sizeof(filename), "/spiffs/session_%u.bin",
              activeFileIdx_);
     FILE* f = fopen(filename, "ab");
     if (f == nullptr) {
@@ -200,12 +206,13 @@ void LoggerService::writeRecord(double speed, std::optional<double> distance) {
 void LoggerService::checkAndRotateFile() {
     // 18000 lines is 30 minutes of logging at 10 Hz
     if (linesWritten_ >= 18000) {
-        activeFileIdx_ = (activeFileIdx_ + 1) % 6;
-        saveActiveFileIndex();
+        activeFileIdx_++;
         linesWritten_ = 0;
 
+        freeUpSpaceIfNeeded();
+
         char filename[32];
-        snprintf(filename, sizeof(filename), "/spiffs/session_%d.bin",
+        snprintf(filename, sizeof(filename), "/spiffs/session_%u.bin",
                  activeFileIdx_);
         FILE* f = fopen(filename, "wb");
         if (f != nullptr) {
@@ -215,30 +222,43 @@ void LoggerService::checkAndRotateFile() {
     }
 }
 
-void LoggerService::loadActiveFileIndex() {
-    nvs_handle_t my_handle;
-    esp_err_t err = nvs_open("storage", NVS_READWRITE, &my_handle);
-    if (err == ESP_OK) {
-        uint8_t idx = 0;
-        err = nvs_get_u8(my_handle, "active_file", &idx);
-        if (err == ESP_OK && idx < 6) {
-            activeFileIdx_ = idx;
-        } else {
-            activeFileIdx_ = 0;
+std::vector<uint32_t> LoggerService::getSessionFiles() {
+    std::vector<uint32_t> indices;
+    DIR* dir = opendir("/spiffs");
+    if (dir != nullptr) {
+        struct dirent* ent;
+        while ((ent = readdir(dir)) != nullptr) {
+            uint32_t idx;
+            if (sscanf(ent->d_name, "session_%u.bin", &idx) == 1) {
+                indices.push_back(idx);
+            }
         }
-        nvs_close(my_handle);
-    } else {
-        activeFileIdx_ = 0;
+        closedir(dir);
     }
+    std::sort(indices.begin(), indices.end());
+    return indices;
 }
 
-void LoggerService::saveActiveFileIndex() {
-    nvs_handle_t my_handle;
-    esp_err_t err = nvs_open("storage", NVS_READWRITE, &my_handle);
-    if (err == ESP_OK) {
-        nvs_set_u8(my_handle, "active_file", activeFileIdx_);
-        nvs_commit(my_handle);
-        nvs_close(my_handle);
+void LoggerService::freeUpSpaceIfNeeded() {
+    size_t total = 0, used = 0;
+    if (esp_spiffs_info("storage", &total, &used) != ESP_OK) {
+        return;
+    }
+    // Maintain at least 300KB free
+    while (total > 300000 && (total - used) < 300000) {
+        auto files = getSessionFiles();
+        if (files.empty()) break;
+
+        char filepath[64];
+        snprintf(filepath, sizeof(filepath), "/spiffs/session_%u.bin",
+                 files.front());
+        unlink(filepath);
+        ESP_LOGI(tag.data(), "Deleted oldest session to free space: %s",
+                 filepath);
+
+        if (esp_spiffs_info("storage", &total, &used) != ESP_OK) {
+            break;
+        }
     }
 }
 
@@ -276,12 +296,11 @@ void LoggerService::dumpLogs() {
         }
     };
 
-    // Dump chronologically: from activeFileIdx_ + 1 to activeFileIdx_ (modulo
-    // 6)
-    for (int i = 1; i <= 6; ++i) {
-        int idx = (activeFileIdx_ + i) % 6;
+    // Dump chronologically by retrieving sorted files
+    auto files = getSessionFiles();
+    for (uint32_t idx : files) {
         char filename[32];
-        snprintf(filename, sizeof(filename), "/spiffs/session_%d.bin", idx);
+        snprintf(filename, sizeof(filename), "/spiffs/session_%u.bin", idx);
         dumpFile(filename);
     }
 

@@ -3,6 +3,7 @@
 
 #include <mutex>
 #include <optional>
+#include <vector>
 
 namespace rta {
 
@@ -33,11 +34,11 @@ class LoggerService {
 
     void writeRecord(double speed, std::optional<double> distance);
     void checkAndRotateFile();
-    void loadActiveFileIndex();
-    void saveActiveFileIndex();
+    void freeUpSpaceIfNeeded();
+    std::vector<uint32_t> getSessionFiles();
 
     mutable std::mutex mutex_;
-    uint8_t activeFileIdx_{0};
+    uint32_t activeFileIdx_{0};
     uint32_t linesWritten_{0};
     bool isLoggingActive_{false};
     bool isDumping_{false};
