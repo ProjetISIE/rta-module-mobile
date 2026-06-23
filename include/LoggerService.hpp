@@ -7,6 +7,8 @@
 
 namespace rta {
 
+struct GpsStatus;
+
 class LoggerService {
   public:
     static LoggerService& instance() {

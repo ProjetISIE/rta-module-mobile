@@ -56,20 +56,18 @@ double convertPositionToDecimal(nmea_position pos) {
     return decimalDegrees;
 }
 
-uint32_t convertUtcTmToEpoch(const struct tm& timeInfo) {
-    int year = timeInfo.tm_year + 1900;
-    int month = timeInfo.tm_mon + 1;
+uint32_t utc_tm_to_epoch(const struct tm& t) {
+    int year = t.tm_year + 1900;
+    int month = t.tm_mon + 1; // 1-12
     if (month <= 2) {
         year -= 1;
         month += 12;
     }
-    long days = (365L * year) + (year / 4) - (year / 100) + (year / 400);
-    days += (367L * month - 362) / 12;
-    days += timeInfo.tm_mday - 1;
-    days -= 719499L; // Days from year 0 to 1970
+    int days = 365 * year + year / 4 - year / 100 + year / 400 +
+               367 * month / 12 - 30 + t.tm_mday - 719499;
 
-    return static_cast<uint32_t>(days * 86400L + timeInfo.tm_hour * 3600L +
-                                 timeInfo.tm_min * 60L + timeInfo.tm_sec);
+    return static_cast<uint32_t>(days * 86400 + t.tm_hour * 3600 +
+                                 t.tm_min * 60 + t.tm_sec);
 }
 } // namespace
 
@@ -100,8 +98,7 @@ void GpsService::processNmeaSentence(std::string_view sentence) {
                 status_.latitude_ = convertPositionToDecimal(rmc->latitude);
                 status_.longitude_ = convertPositionToDecimal(rmc->longitude);
                 status_.speedKmh_ = rmc->gndspd_knots * 1.852F;
-                status_.utcEpoch_ =
-                    static_cast<uint32_t>(timegm(&rmc->date_time));
+                status_.utcEpoch_ = utc_tm_to_epoch(rmc->date_time);
 
                 if (firstFix_) {
                     lastLat_ = status_.latitude_;
@@ -137,14 +134,14 @@ void GpsService::processNmeaSentence(std::string_view sentence) {
 void GpsService::readerTask(void*) {
     auto& service = GpsService::instance();
 
-    uart_config_t uartConfig = {.baud_rate = 9600,
-                                .data_bits = UART_DATA_8_BITS,
-                                .parity = UART_PARITY_DISABLE,
-                                .stop_bits = UART_STOP_BITS_1,
-                                .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
-                                .rx_flow_ctrl_thresh = 0,
-                                .source_clk = UART_SCLK_DEFAULT,
-                                .flags = {}};
+    uart_config_t uartConfig = {};
+    uartConfig.baud_rate = 9600;
+    uartConfig.data_bits = UART_DATA_8_BITS;
+    uartConfig.parity = UART_PARITY_DISABLE;
+    uartConfig.stop_bits = UART_STOP_BITS_1;
+    uartConfig.flow_ctrl = UART_HW_FLOWCTRL_DISABLE;
+    uartConfig.rx_flow_ctrl_thresh = 0;
+    uartConfig.source_clk = UART_SCLK_DEFAULT;
 
     ESP_ERROR_CHECK(
         uart_driver_install(gpsUartPort, uartBufSize * 2, 0, 0, nullptr, 0));

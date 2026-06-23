@@ -72,8 +72,8 @@ void LoggerService::start() {
     // 4. Free up space and open new active file
     freeUpSpaceIfNeeded();
     char filename[32];
-    snprintf(filename, sizeof(filename), "/spiffs/session_%u.bin",
-             activeFileIdx_);
+    snprintf(filename, sizeof(filename), "/spiffs/session_%lu.bin",
+             (unsigned long)activeFileIdx_);
     FILE* f = fopen(filename, "wb");
     if (f != nullptr) {
         fclose(f);
@@ -183,8 +183,8 @@ void LoggerService::writeRecord(const GpsStatus& status,
     checkAndRotateFile();
 
     char filename[32];
-    snprintf(filename, sizeof(filename), "/spiffs/session_%u.bin",
-             activeFileIdx_);
+    snprintf(filename, sizeof(filename), "/spiffs/session_%lu.bin",
+             (unsigned long)activeFileIdx_);
     FILE* f = fopen(filename, "ab");
     if (f == nullptr) {
         return;
@@ -216,8 +216,8 @@ void LoggerService::checkAndRotateFile() {
         freeUpSpaceIfNeeded();
 
         char filename[32];
-        snprintf(filename, sizeof(filename), "/spiffs/session_%u.bin",
-                 activeFileIdx_);
+        snprintf(filename, sizeof(filename), "/spiffs/session_%lu.bin",
+                 (unsigned long)activeFileIdx_);
         FILE* f = fopen(filename, "wb");
         if (f != nullptr) {
             fclose(f);
@@ -232,9 +232,9 @@ std::vector<uint32_t> LoggerService::getSessionFiles() {
     if (dir != nullptr) {
         struct dirent* ent;
         while ((ent = readdir(dir)) != nullptr) {
-            uint32_t idx;
-            if (sscanf(ent->d_name, "session_%u.bin", &idx) == 1) {
-                indices.push_back(idx);
+            unsigned long idx_ul;
+            if (sscanf(ent->d_name, "session_%lu.bin", &idx_ul) == 1) {
+                indices.push_back(static_cast<uint32_t>(idx_ul));
             }
         }
         closedir(dir);
@@ -254,8 +254,8 @@ void LoggerService::freeUpSpaceIfNeeded() {
         if (files.empty()) break;
 
         char filepath[64];
-        snprintf(filepath, sizeof(filepath), "/spiffs/session_%u.bin",
-                 files.front());
+        snprintf(filepath, sizeof(filepath), "/spiffs/session_%lu.bin",
+                 (unsigned long)files.front());
         unlink(filepath);
         ESP_LOGI(tag.data(), "Deleted oldest session to free space: %s",
                  filepath);
@@ -306,7 +306,8 @@ void LoggerService::dumpLogs() {
     auto files = getSessionFiles();
     for (uint32_t idx : files) {
         char filename[32];
-        snprintf(filename, sizeof(filename), "/spiffs/session_%u.bin", idx);
+        snprintf(filename, sizeof(filename), "/spiffs/session_%lu.bin",
+                 (unsigned long)idx);
         dumpFile(filename);
     }
 
