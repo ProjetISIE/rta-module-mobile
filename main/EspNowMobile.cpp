@@ -4,7 +4,9 @@
 #include "esp_mac.h"
 #include "esp_netif.h"
 #include "esp_now.h"
+#include "esp_timer.h"
 #include "esp_wifi.h"
+#include <atomic>
 
 extern "C" uint16_t gattReceivedDistance;
 
@@ -12,6 +14,7 @@ namespace rta {
 namespace espnow {
 
 static const char* TAG = "ESP_NOW_MOBILE";
+static std::atomic<int64_t> lastPacketTimeUs{0};
 
 #pragma pack(push, 1)
 struct EspNowDistancePacket {
@@ -28,8 +31,15 @@ static void recv_cb(const esp_now_recv_info_t* esp_now_info,
         if (pkt->magic[0] == 'R' && pkt->magic[1] == 'T' &&
             pkt->magic[2] == 'A' && pkt->magic[3] == '!') {
             gattReceivedDistance = pkt->distance_mm;
+            lastPacketTimeUs.store(esp_timer_get_time());
         }
     }
+}
+
+bool isActive() {
+    int64_t last = lastPacketTimeUs.load();
+    if (last == 0) return false;
+    return (esp_timer_get_time() - last) < 5000000; // 5 seconds timeout
 }
 
 void init() {

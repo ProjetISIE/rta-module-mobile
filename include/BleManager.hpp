@@ -19,6 +19,7 @@ class BleManager {
     // ... (copy/move delete)
 
     void startScanning() noexcept;
+    void disconnectFixed();
 
     static int gapEventCallback(struct ble_gap_event* event, void* arg);
 

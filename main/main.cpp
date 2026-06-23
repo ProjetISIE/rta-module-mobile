@@ -103,6 +103,12 @@ void processAndDisplayTask(void* pvParameters) {
 
         updateGlassesDisplay(*context, status, state);
 
+        if (rta::espnow::isActive() && context->manager().isFixedConnected()) {
+            ESP_LOGI(tag, "ESP-NOW is active. Disconnecting BLE from RTA_FIXE "
+                          "to save resources.");
+            context->manager().disconnectFixed();
+        }
+
         // Formatted console output via std::print (C++23)
         if (!rta::LoggerService::instance().isDumping()) {
             if (status.fix_) {

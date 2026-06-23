@@ -1,5 +1,6 @@
 #include "BleManager.hpp"
 #include "ActiveLook.hpp"
+#include "EspNowMobile.hpp"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -40,9 +41,15 @@ void handleDiscovery(struct ble_gap_event* event, BleManager* manager) {
             connecting_to_glasses = true;
         } else if (name.starts_with("RTA_FIXE") &&
                    manager->getFixedConnHandle() == BLE_HS_CONN_HANDLE_NONE) {
-            ESP_LOGI(tag.data(), "RTA_FIXE found, connecting...");
-            found = true;
-            connecting_to_glasses = false;
+            if (!rta::espnow::isActive()) {
+                ESP_LOGI(
+                    tag.data(),
+                    "RTA_FIXE found (ESP-NOW inactive), connecting via BLE...");
+                found = true;
+                connecting_to_glasses = false;
+            } else {
+                // Ignore BLE advertisement because ESP-NOW is active
+            }
         }
 
         if (found) {
@@ -101,6 +108,12 @@ void BleManager::startScanning() noexcept {
                           BleManager::gapEventCallback, this);
     if (rc != 0 && rc != BLE_HS_EALREADY) {
         ESP_LOGE(tag.data(), "Failed to start scanning; rc=%d", rc);
+    }
+}
+
+void BleManager::disconnectFixed() {
+    if (fixedConnHandle_ != BLE_HS_CONN_HANDLE_NONE) {
+        ble_gap_terminate(fixedConnHandle_, BLE_ERR_REM_USER_CONN_TERM);
     }
 }
 
