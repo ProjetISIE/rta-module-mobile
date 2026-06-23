@@ -4,3 +4,4 @@ build/
 *.log
 managed_components/
 libraries/
+sdkconfig
