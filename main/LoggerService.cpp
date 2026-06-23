@@ -122,15 +122,14 @@ void LoggerService::consoleTask(void* arg) {
 
     // Install UART driver on UART0 if not already installed.
     // If a driver is already installed, this will fail safely or do nothing.
-    uart_config_t uart_config = {
-        .baud_rate = 115200,
-        .data_bits = UART_DATA_8_BITS,
-        .parity = UART_PARITY_DISABLE,
-        .stop_bits = UART_STOP_BITS_1,
-        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
-        .rx_flow_ctrl_thresh = 122,
-        .source_clk = UART_SCLK_DEFAULT,
-    };
+    uart_config_t uart_config = {};
+    uart_config.baud_rate = 115200;
+    uart_config.data_bits = UART_DATA_8_BITS;
+    uart_config.parity = UART_PARITY_DISABLE;
+    uart_config.stop_bits = UART_STOP_BITS_1;
+    uart_config.flow_ctrl = UART_HW_FLOWCTRL_DISABLE;
+    uart_config.rx_flow_ctrl_thresh = 0;
+    uart_config.source_clk = UART_SCLK_DEFAULT;
     uart_driver_install(UART_NUM_0, 256, 256, 0, nullptr, 0);
     uart_param_config(UART_NUM_0, &uart_config);
 
