@@ -62,9 +62,6 @@ void LoggerService::start() {
         return;
     }
 
-    // 2. Start the UART reader task for the console
-    startConsoleReader();
-
     // 3. Clean up legacy V1 files safely
     std::vector<std::string> filesToDelete;
     DIR* dir = opendir("/spiffs");
@@ -183,6 +180,13 @@ void LoggerService::consoleTask(void* arg) {
                         [](unsigned char c) { return std::toupper(c); });
                     if (cmd.find("DUMP") != std::string::npos) {
                         self->dumpLogs();
+                    } else {
+                        printf("\n[DEBUG] Ignored command: '%s' (len: %d)\n",
+                               cmd.c_str(), (int)cmd.length());
+                        for (int i = 0; i < cmd.length(); i++) {
+                            printf("%02X ", (uint8_t)cmd[i]);
+                        }
+                        printf("\n");
                     }
                 }
                 line_len = 0;
