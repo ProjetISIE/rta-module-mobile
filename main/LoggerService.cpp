@@ -65,19 +65,24 @@ void LoggerService::start() {
     // 2. Start the UART reader task for the console
     startConsoleReader();
 
-    // 3. Clean up legacy V1 files
+    // 3. Clean up legacy V1 files safely
+    std::vector<std::string> filesToDelete;
     DIR* dir = opendir("/spiffs");
     if (dir != nullptr) {
         struct dirent* ent;
         while ((ent = readdir(dir)) != nullptr) {
             if (strncmp(ent->d_name, "session_", 8) == 0) {
-                char filepath[300];
-                snprintf(filepath, sizeof(filepath), "/spiffs/%s", ent->d_name);
-                unlink(filepath);
-                ESP_LOGI(tag.data(), "Deleted legacy file: %s", filepath);
+                filesToDelete.push_back(ent->d_name);
             }
         }
         closedir(dir);
+    }
+
+    for (const auto& fName : filesToDelete) {
+        char filepath[300];
+        snprintf(filepath, sizeof(filepath), "/spiffs/%s", fName.c_str());
+        unlink(filepath);
+        ESP_LOGI(tag.data(), "Deleted legacy file: %s", filepath);
     }
 
     // 4. Load active file index dynamically by scanning directory
