@@ -9,8 +9,10 @@
 #include "nvs.h"
 #include "nvs_flash.h"
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <dirent.h>
+#include <string>
 #include <string_view>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -60,7 +62,25 @@ void LoggerService::start() {
         return;
     }
 
-    // 3. Load active file index dynamically by scanning directory
+    // 2. Start the UART reader task for the console
+    startConsoleReader();
+
+    // 3. Clean up legacy V1 files
+    DIR* dir = opendir("/spiffs");
+    if (dir != nullptr) {
+        struct dirent* ent;
+        while ((ent = readdir(dir)) != nullptr) {
+            if (strncmp(ent->d_name, "session_", 8) == 0) {
+                char filepath[300];
+                snprintf(filepath, sizeof(filepath), "/spiffs/%s", ent->d_name);
+                unlink(filepath);
+                ESP_LOGI(tag.data(), "Deleted legacy file: %s", filepath);
+            }
+        }
+        closedir(dir);
+    }
+
+    // 4. Load active file index dynamically by scanning directory
     auto files = getSessionFiles();
     if (!files.empty()) {
         activeFileIdx_ = files.back() + 1;
@@ -69,10 +89,10 @@ void LoggerService::start() {
     }
     linesWritten_ = 0;
 
-    // 4. Free up space and open new active file
+    // 5. Free up space and open new active file
     freeUpSpaceIfNeeded();
     char filename[32];
-    snprintf(filename, sizeof(filename), "/spiffs/session_%lu.bin",
+    snprintf(filename, sizeof(filename), "/spiffs/log_v2_%lu.bin",
              (unsigned long)activeFileIdx_);
     FILE* f = fopen(filename, "wb");
     if (f != nullptr) {
@@ -151,8 +171,12 @@ void LoggerService::consoleTask(void* arg) {
 
                 line[line_len] = '\0';
                 if (line_len > 0) {
-                    std::string_view command(line);
-                    if (command == "DUMP") {
+                    std::string cmd(line);
+                    // Convert to uppercase
+                    std::transform(
+                        cmd.begin(), cmd.end(), cmd.begin(),
+                        [](unsigned char c) { return std::toupper(c); });
+                    if (cmd.find("DUMP") != std::string::npos) {
                         self->dumpLogs();
                     }
                 }
@@ -182,7 +206,7 @@ void LoggerService::writeRecord(const GpsStatus& status,
     checkAndRotateFile();
 
     char filename[32];
-    snprintf(filename, sizeof(filename), "/spiffs/session_%lu.bin",
+    snprintf(filename, sizeof(filename), "/spiffs/log_v2_%lu.bin",
              (unsigned long)activeFileIdx_);
     FILE* f = fopen(filename, "ab");
     if (f == nullptr) {
@@ -215,7 +239,7 @@ void LoggerService::checkAndRotateFile() {
         freeUpSpaceIfNeeded();
 
         char filename[32];
-        snprintf(filename, sizeof(filename), "/spiffs/session_%lu.bin",
+        snprintf(filename, sizeof(filename), "/spiffs/log_v2_%lu.bin",
                  (unsigned long)activeFileIdx_);
         FILE* f = fopen(filename, "wb");
         if (f != nullptr) {
@@ -232,7 +256,7 @@ std::vector<uint32_t> LoggerService::getSessionFiles() {
         struct dirent* ent;
         while ((ent = readdir(dir)) != nullptr) {
             unsigned long idx_ul;
-            if (sscanf(ent->d_name, "session_%lu.bin", &idx_ul) == 1) {
+            if (sscanf(ent->d_name, "log_v2_%lu.bin", &idx_ul) == 1) {
                 indices.push_back(static_cast<uint32_t>(idx_ul));
             }
         }
@@ -253,7 +277,7 @@ void LoggerService::freeUpSpaceIfNeeded() {
         if (files.empty()) break;
 
         char filepath[64];
-        snprintf(filepath, sizeof(filepath), "/spiffs/session_%lu.bin",
+        snprintf(filepath, sizeof(filepath), "/spiffs/log_v2_%lu.bin",
                  (unsigned long)files.front());
         unlink(filepath);
         ESP_LOGI(tag.data(), "Deleted oldest session to free space: %s",
@@ -305,7 +329,7 @@ void LoggerService::dumpLogs() {
     auto files = getSessionFiles();
     for (uint32_t idx : files) {
         char filename[32];
-        snprintf(filename, sizeof(filename), "/spiffs/session_%lu.bin",
+        snprintf(filename, sizeof(filename), "/spiffs/log_v2_%lu.bin",
                  (unsigned long)idx);
         dumpFile(filename);
     }
