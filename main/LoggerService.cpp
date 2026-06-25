@@ -1,5 +1,4 @@
 #include "LoggerService.hpp"
-#include "DistanceData.hpp"
 #include "GpsService.hpp"
 #include "driver/uart.h"
 #include "esp_log.h"
@@ -124,13 +123,12 @@ void LoggerService::loggerTask(void* arg) {
         // Wait for next cycle
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
 
-        // Get GPS status
-        auto status = GpsService::instance().getStatus();
+        auto status = self->gps_.getStatus();
 
         // Get BLE distance
         std::optional<double> distVal;
         const uint16_t dist =
-            rta::globalReceivedDistance.load(std::memory_order_relaxed);
+            self->distanceRef_.load(std::memory_order_relaxed);
         if (dist != 0xFFFF) {
             distVal = static_cast<double>(dist) / 1000.0;
         }

@@ -37,19 +37,19 @@ CheckOptions:
   - key:   readability-identifier-naming.ClassCase
     value: CamelCase
   - key:   readability-identifier-naming.FunctionCase
-    value: camelBack
+    value: CamelCase
   - key:   readability-identifier-naming.GlobalFunctionCase
-    value: camelBack
+    value: CamelCase
   - key:   readability-identifier-naming.VariableCase
-    value: camelBack
+    value: lower_case
   - key:   readability-identifier-naming.GlobalVariableCase
-    value: camelBack
+    value: lower_case
   - key:   readability-identifier-naming.ParameterCase
-    value: camelBack
+    value: lower_case
   - key:   readability-identifier-naming.NamespaceCase
     value: lower_case
   - key:   readability-identifier-naming.MemberCase
-    value: camelBack
+    value: lower_case
   - key:   readability-identifier-naming.MemberSuffix
     value: _
   - key:   readability-identifier-naming.StructCase
@@ -59,6 +59,10 @@ CheckOptions:
   - key:   readability-identifier-naming.EnumConstantCase
     value: UPPER_CASE
   - key:   readability-identifier-naming.ConstexprVariableCase
-    value: camelBack
+    value: CamelCase
+  - key:   readability-identifier-naming.ConstexprVariablePrefix
+    value: k
   - key:   readability-identifier-naming.GlobalConstantCase
-    value: UPPER_CASE
+    value: CamelCase
+  - key:   readability-identifier-naming.GlobalConstantPrefix
+    value: k

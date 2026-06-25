@@ -10,6 +10,13 @@
 
 namespace rta {
 
+namespace {
+constexpr uint8_t kLumaTextConfigDefault[] = {0x00, 0x99, 0x00, 0x60,
+                                              0x04, 0x02, 0x0F};
+constexpr uint8_t kYPosSpeed = 0x40;
+constexpr uint8_t kYPosDistance = 0x80;
+} // namespace
+
 void ActiveLook::sendCommand(Command cmd, std::span<const uint8_t> payload) {
     if (!connectionHandle_) {
         return;
@@ -59,7 +66,10 @@ void ActiveLook::displayText(std::string_view msg) {
     vTaskDelay(pdMS_TO_TICKS(50));
 
     // LumaText config: {X, Y, Rotation, Font, Color}
-    std::vector<uint8_t> txt = {0x00, 0x99, 0x00, 0x60, 0x04, 0x02, 0x0F};
+    std::vector<uint8_t> txt;
+    txt.reserve(sizeof(kLumaTextConfigDefault) + msg.length() + 1);
+    txt.insert(txt.end(), std::begin(kLumaTextConfigDefault),
+               std::end(kLumaTextConfigDefault));
 
     const auto displayMsg = msg.substr(0, std::min(msg.length(), size_t{50}));
 
@@ -128,9 +138,9 @@ void ActiveLook::displaySpeedAndDistance(std::optional<double> speedKmh,
         distanceStr += "m";
     }
 
-    sendCommand(Command::LUMA_TEXT, buildPayload(speedStr, 0x40));
+    sendCommand(Command::LUMA_TEXT, buildPayload(speedStr, kYPosSpeed));
     vTaskDelay(pdMS_TO_TICKS(50));
-    sendCommand(Command::LUMA_TEXT, buildPayload(distanceStr, 0x80));
+    sendCommand(Command::LUMA_TEXT, buildPayload(distanceStr, kYPosDistance));
 }
 
 } // namespace rta

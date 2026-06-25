@@ -12,6 +12,9 @@
 extern "C" {
 
 uint16_t gattSvrChrSpdValHandle;
+static rta::GpsService* s_gattGpsService = nullptr;
+
+void set_gatt_gps_service(rta::GpsService* gps) { s_gattGpsService = gps; }
 
 static const ble_uuid128_t GATT_SVR_SVC_UUID =
     BLE_UUID128_INIT(0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad,
@@ -78,7 +81,10 @@ struct ble_gatt_svc_def gpsGattSvcs[] = {
 static int gattSvrChrAccess(uint16_t /*connHandle*/, uint16_t /*attrHandle*/,
                             struct ble_gatt_access_ctxt* ctxt, void* /*arg*/) {
     if (ble_uuid_cmp(ctxt->chr->uuid, &GATT_SVR_CHR_SPD_UUID.u) == 0) {
-        const float speed = rta::GpsService::instance().getStatus().speedKmh_;
+        float speed = 0.0f;
+        if (s_gattGpsService) {
+            speed = s_gattGpsService->getStatus().speedKmh_;
+        }
         return os_mbuf_append(ctxt->om, &speed, sizeof(speed)) == 0
                    ? 0
                    : BLE_ATT_ERR_INSUFFICIENT_RES;

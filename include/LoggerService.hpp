@@ -5,16 +5,15 @@
 #include <optional>
 #include <vector>
 
-namespace rta {
+#include "GpsService.hpp"
+#include <atomic>
 
-struct GpsStatus;
+namespace rta {
 
 class LoggerService {
   public:
-    static LoggerService& instance() {
-        static LoggerService inst;
-        return inst;
-    }
+    LoggerService(GpsService& gps, std::atomic<uint16_t>& distanceRef)
+        : gps_(gps), distanceRef_(distanceRef) {}
 
     /// Initializes SPIFFS, NVS, and starts the 10Hz logging task.
     void start();
@@ -29,7 +28,8 @@ class LoggerService {
     [[nodiscard]] bool isDumping() const { return isDumping_; }
 
   private:
-    LoggerService() = default;
+    GpsService& gps_;
+    std::atomic<uint16_t>& distanceRef_;
 
     static void loggerTask(void* arg);
     static void consoleTask(void* arg);

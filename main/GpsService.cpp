@@ -131,8 +131,8 @@ void GpsService::processNmeaSentence(std::string_view sentence) {
     nmea_free(data);
 }
 
-void GpsService::readerTask(void*) {
-    auto& service = GpsService::instance();
+void GpsService::readerTask(void* arg) {
+    auto* service = static_cast<GpsService*>(arg);
 
     uart_config_t uartConfig = {};
     uartConfig.baud_rate = 9600;
@@ -197,7 +197,7 @@ void GpsService::readerTask(void*) {
                 const size_t sentenceLen =
                     static_cast<size_t>(std::distance(itStart, itEnd)) + 2;
                 if (sentenceLen <= NMEA_MAX_LENGTH) {
-                    service.processNmeaSentence(std::string_view(
+                    service->processNmeaSentence(std::string_view(
                         reinterpret_cast<const char*>(&(*itStart)),
                         sentenceLen));
                 }
@@ -218,7 +218,7 @@ void GpsService::readerTask(void*) {
 }
 
 void GpsService::start() {
-    xTaskCreate(readerTask, "gps_reader_task", 4096, nullptr, 5, nullptr);
+    xTaskCreate(readerTask, "gps_reader_task", 4096, this, 5, nullptr);
 }
 
 } // namespace rta

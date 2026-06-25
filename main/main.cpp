@@ -1,7 +1,7 @@
 #include "ActiveLook.hpp"
 #include "BleManager.hpp"
 #include "BleServer.hpp"
-#include "DistanceData.hpp"
+
 #include "EspNowMobile.hpp"
 #include "GpsService.hpp"
 #include "LoggerService.hpp"
@@ -9,6 +9,7 @@
 #include "freertos/task.h"
 #include "host/ble_gatt.h" // For ble_gatt_svc_def
 #include "nvs_flash.h"
+#include <atomic>
 #include <cstdio>
 #include <memory>
 #include <optional>
@@ -19,29 +20,40 @@ constexpr const char* tag = "RTA";
 
 class AppContext {
   public:
-    AppContext() : server_("RTA_MOBILE"), manager_(glasses_) {}
+    AppContext()
+        : server_("RTA_MOBILE"), manager_(glasses_, distance_),
+          logger_(gps_, distance_) {}
 
     rta::ActiveLook& glasses() { return glasses_; }
     rta::BleServer& server() { return server_; }
     rta::BleManager& manager() { return manager_; }
+    rta::GpsService& gps() { return gps_; }
+    rta::LoggerService& logger() { return logger_; }
+    std::atomic<uint16_t>& distance() { return distance_; }
 
   private:
+    std::atomic<uint16_t> distance_{0xFFFF};
+    rta::GpsService gps_;
     rta::ActiveLook glasses_;
     rta::BleServer server_;
     rta::BleManager manager_;
+    rta::LoggerService logger_;
 };
+
+constexpr uint16_t kInvalidDistance = 0xFFFF;
 
 struct DisplayState {
     bool wasConnected_{false};
     bool lastFix_{false};
     float lastSpeedKmh_{0.0f};
-    uint16_t lastDistance_{0xFFFF};
+    uint16_t lastDistance_{kInvalidDistance};
     bool forceUpdate_{false};
     int rtaOkTimer_{0};
 };
 
 // GATT services defined in gps_gatt_def.cpp
 extern "C" struct ble_gatt_svc_def gpsGattSvcs[];
+extern "C" void set_gatt_gps_service(rta::GpsService* gps);
 
 void updateGlassesDisplay(AppContext& context, const rta::GpsStatus& status,
                           DisplayState& state) {
@@ -61,7 +73,7 @@ void updateGlassesDisplay(AppContext& context, const rta::GpsStatus& status,
             const bool speedChanged =
                 status.fix_ && (status.speedKmh_ != state.lastSpeedKmh_);
             const bool distChanged =
-                (rta::globalReceivedDistance.load(std::memory_order_relaxed) !=
+                (context.distance().load(std::memory_order_relaxed) !=
                  state.lastDistance_);
 
             if (state.forceUpdate_ || fixChanged || speedChanged ||
@@ -71,12 +83,11 @@ void updateGlassesDisplay(AppContext& context, const rta::GpsStatus& status,
                     speedVal = status.speedKmh_;
                 }
                 std::optional<double> distVal;
-                if (rta::globalReceivedDistance.load(
-                        std::memory_order_relaxed) != 0xFFFF) {
-                    distVal =
-                        static_cast<double>(rta::globalReceivedDistance.load(
-                            std::memory_order_relaxed)) /
-                        1000.0;
+                if (context.distance().load(std::memory_order_relaxed) !=
+                    kInvalidDistance) {
+                    distVal = static_cast<double>(context.distance().load(
+                                  std::memory_order_relaxed)) /
+                              1000.0;
                 }
 
                 context.glasses().displaySpeedAndDistance(speedVal, distVal);
@@ -84,7 +95,7 @@ void updateGlassesDisplay(AppContext& context, const rta::GpsStatus& status,
                 state.lastFix_ = status.fix_;
                 state.lastSpeedKmh_ = status.fix_ ? status.speedKmh_ : 0.0f;
                 state.lastDistance_ =
-                    rta::globalReceivedDistance.load(std::memory_order_relaxed);
+                    context.distance().load(std::memory_order_relaxed);
                 state.forceUpdate_ = false;
             }
         }
@@ -93,14 +104,14 @@ void updateGlassesDisplay(AppContext& context, const rta::GpsStatus& status,
         state.rtaOkTimer_ = 0;
         state.lastFix_ = false;
         state.lastSpeedKmh_ = 0.0f;
-        state.lastDistance_ = 0xFFFF;
+        state.lastDistance_ = kInvalidDistance;
         state.forceUpdate_ = false;
     }
 }
 
 void processAndDisplayTask(void* pvParameters) {
     auto* context = static_cast<AppContext*>(pvParameters);
-    auto& gps = rta::GpsService::instance();
+    auto& gps = context->gps();
     DisplayState state;
 
     while (true) {
@@ -115,10 +126,10 @@ void processAndDisplayTask(void* pvParameters) {
         }
 
         // Formatted console output via std::print (C++23)
-        if (!rta::LoggerService::instance().isDumping()) {
+        if (!context->logger().isDumping()) {
             if (status.fix_) {
-                if (rta::globalReceivedDistance.load(
-                        std::memory_order_relaxed) == 0xFFFF) {
+                if (context->distance().load(std::memory_order_relaxed) ==
+                    kInvalidDistance) {
                     std::print(
                         "\r[FIX OK] Sat: {:2d} | Speed: {:6.2f} km/h | Dist: "
                         "--- | "
@@ -131,25 +142,24 @@ void processAndDisplayTask(void* pvParameters) {
                         "{:6.2f}m | "
                         "L: {:9.6f}, {:9.6f}   ",
                         status.satellites_, status.speedKmh_,
-                        static_cast<float>(rta::globalReceivedDistance.load(
+                        static_cast<float>(context->distance().load(
                             std::memory_order_relaxed)) /
                             1000.0F,
                         status.latitude_, status.longitude_);
                 }
             } else {
-                if (rta::globalReceivedDistance.load(
-                        std::memory_order_relaxed) == 0xFFFF) {
+                if (context->distance().load(std::memory_order_relaxed) ==
+                    kInvalidDistance) {
                     std::print(
                         "\r[WAITING] Dist: --- | No fix data parsed yet... "
                         "         ");
                 } else {
-                    std::print(
-                        "\r[WAITING] Dist: {:6.2f}m | No fix data "
-                        "parsed yet... "
-                        "         ",
-                        static_cast<float>(rta::globalReceivedDistance.load(
-                            std::memory_order_relaxed)) /
-                            1000.0F);
+                    std::print("\r[WAITING] Dist: {:6.2f}m | No fix data "
+                               "parsed yet... "
+                               "         ",
+                               static_cast<float>(context->distance().load(
+                                   std::memory_order_relaxed)) /
+                                   1000.0F);
                 }
             }
             (void)std::fflush(stdout);
@@ -188,13 +198,14 @@ extern "C" void app_main() {
     });
 
     // Start GPS Service
-    rta::GpsService::instance().start();
+    context->gps().start();
 
     // Start Logger Service and Console Reader
-    rta::LoggerService::instance().start();
-    rta::LoggerService::instance().startConsoleReader();
+    context->logger().start();
+    context->logger().startConsoleReader();
 
     // Register services and start BLE stack
+    set_gatt_gps_service(&context->gps());
     if (context->server().registerServices(gpsGattSvcs) != 0) {
         ESP_LOGE(tag, "Failed to register BLE services");
         return;
@@ -205,7 +216,7 @@ extern "C" void app_main() {
         return;
     }
 
-    rta::espnow::init();
+    rta::espnow::init(context->distance());
 
     // Create display task
     xTaskCreate(processAndDisplayTask, "display_task", 4096, context.get(), 5,

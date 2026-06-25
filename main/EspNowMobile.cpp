@@ -1,5 +1,5 @@
 #include "EspNowMobile.hpp"
-#include "DistanceData.hpp"
+
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_mac.h"
@@ -14,6 +14,7 @@ namespace espnow {
 
 static const char* TAG = "ESP_NOW_MOBILE";
 static std::atomic<int64_t> lastPacketTimeUs{0};
+static std::atomic<uint16_t>* s_distanceRef = nullptr;
 
 #pragma pack(push, 1)
 struct EspNowDistancePacket {
@@ -29,8 +30,10 @@ static void recv_cb(const esp_now_recv_info_t* esp_now_info,
             reinterpret_cast<const EspNowDistancePacket*>(data);
         if (pkt->magic[0] == 'R' && pkt->magic[1] == 'T' &&
             pkt->magic[2] == 'A' && pkt->magic[3] == '!') {
-            rta::globalReceivedDistance.store(pkt->distance_mm,
-                                              std::memory_order_relaxed);
+            if (s_distanceRef) {
+                s_distanceRef->store(pkt->distance_mm,
+                                     std::memory_order_relaxed);
+            }
             lastPacketTimeUs.store(esp_timer_get_time());
         }
     }
@@ -42,7 +45,8 @@ bool isActive() {
     return (esp_timer_get_time() - last) < 5000000; // 5 seconds timeout
 }
 
-void init() {
+void init(std::atomic<uint16_t>& distanceRef) {
+    s_distanceRef = &distanceRef;
     ESP_LOGI(TAG, "Initializing ESP-NOW (Mobile)...");
 
     esp_err_t err = esp_netif_init();

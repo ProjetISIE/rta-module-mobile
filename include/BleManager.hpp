@@ -2,6 +2,7 @@
 #define RTA_BLE_MANAGER_HPP
 
 #include "host/ble_gap.h"
+#include <atomic>
 #include <string_view>
 
 namespace rta {
@@ -13,7 +14,8 @@ class ActiveLook;
  */
 class BleManager {
   public:
-    explicit BleManager(ActiveLook& glasses);
+    explicit BleManager(ActiveLook& glasses,
+                        std::atomic<uint16_t>& distanceRef);
     ~BleManager() = default;
 
     // ... (copy/move delete)
@@ -40,6 +42,7 @@ class BleManager {
                                          void* arg);
 
     ActiveLook& glasses_;
+    std::atomic<uint16_t>& distanceRef_;
     uint16_t glassesConnHandle_{BLE_HS_CONN_HANDLE_NONE};
     uint16_t fixedConnHandle_{BLE_HS_CONN_HANDLE_NONE};
 

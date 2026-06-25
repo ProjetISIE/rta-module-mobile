@@ -27,10 +27,7 @@ struct GpsStatus {
  */
 class GpsService {
   public:
-    static GpsService& instance() {
-        static GpsService inst;
-        return inst;
-    }
+    GpsService() = default;
 
     /// Starts the UART reader task.
     void start();
@@ -42,8 +39,6 @@ class GpsService {
     void processNmeaSentence(std::string_view sentence);
 
   private:
-    GpsService() = default;
-
     static void readerTask(void* arg);
 
     mutable std::mutex mutex_;
