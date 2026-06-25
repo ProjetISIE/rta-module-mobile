@@ -1,5 +1,6 @@
 #include "BleManager.hpp"
 #include "ActiveLook.hpp"
+#include "DistanceData.hpp"
 #include "EspNowMobile.hpp"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -91,12 +92,7 @@ void handleDiscovery(struct ble_gap_event* event, BleManager* manager) {
 }
 } // namespace
 
-BleManager* BleManager::instance = nullptr;
-extern "C" uint16_t gattReceivedDistance;
-
-BleManager::BleManager(ActiveLook& glasses) : glasses_(glasses) {
-    instance = this;
-}
+BleManager::BleManager(ActiveLook& glasses) : glasses_(glasses) {}
 
 void BleManager::startScanning() noexcept {
     if (connection_pending) return;
@@ -202,8 +198,11 @@ int BleManager::gapEventCallback(struct ble_gap_event* event, void* arg) {
         if (event->notify_rx.conn_handle == manager->fixedConnHandle_ &&
             event->notify_rx.attr_handle == manager->fixedDistChrValHandle_) {
             if (OS_MBUF_PKTLEN(event->notify_rx.om) == sizeof(uint16_t)) {
-                ble_hs_mbuf_to_flat(event->notify_rx.om, &gattReceivedDistance,
+                uint16_t dist = 0;
+                ble_hs_mbuf_to_flat(event->notify_rx.om, &dist,
                                     sizeof(uint16_t), nullptr);
+                rta::globalReceivedDistance.store(dist,
+                                                  std::memory_order_relaxed);
             }
         }
         break;

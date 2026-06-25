@@ -1,6 +1,7 @@
 #include "ActiveLook.hpp"
 #include "BleManager.hpp"
 #include "BleServer.hpp"
+#include "DistanceData.hpp"
 #include "EspNowMobile.hpp"
 #include "GpsService.hpp"
 #include "LoggerService.hpp"
@@ -41,7 +42,6 @@ struct DisplayState {
 
 // GATT services defined in gps_gatt_def.cpp
 extern "C" struct ble_gatt_svc_def gpsGattSvcs[];
-extern "C" uint16_t gattReceivedDistance;
 
 void updateGlassesDisplay(AppContext& context, const rta::GpsStatus& status,
                           DisplayState& state) {
@@ -61,7 +61,8 @@ void updateGlassesDisplay(AppContext& context, const rta::GpsStatus& status,
             const bool speedChanged =
                 status.fix_ && (status.speedKmh_ != state.lastSpeedKmh_);
             const bool distChanged =
-                (gattReceivedDistance != state.lastDistance_);
+                (rta::globalReceivedDistance.load(std::memory_order_relaxed) !=
+                 state.lastDistance_);
 
             if (state.forceUpdate_ || fixChanged || speedChanged ||
                 distChanged) {
@@ -70,16 +71,20 @@ void updateGlassesDisplay(AppContext& context, const rta::GpsStatus& status,
                     speedVal = status.speedKmh_;
                 }
                 std::optional<double> distVal;
-                if (gattReceivedDistance != 0xFFFF) {
+                if (rta::globalReceivedDistance.load(
+                        std::memory_order_relaxed) != 0xFFFF) {
                     distVal =
-                        static_cast<double>(gattReceivedDistance) / 1000.0;
+                        static_cast<double>(rta::globalReceivedDistance.load(
+                            std::memory_order_relaxed)) /
+                        1000.0;
                 }
 
                 context.glasses().displaySpeedAndDistance(speedVal, distVal);
 
                 state.lastFix_ = status.fix_;
                 state.lastSpeedKmh_ = status.fix_ ? status.speedKmh_ : 0.0f;
-                state.lastDistance_ = gattReceivedDistance;
+                state.lastDistance_ =
+                    rta::globalReceivedDistance.load(std::memory_order_relaxed);
                 state.forceUpdate_ = false;
             }
         }
@@ -112,7 +117,8 @@ void processAndDisplayTask(void* pvParameters) {
         // Formatted console output via std::print (C++23)
         if (!rta::LoggerService::instance().isDumping()) {
             if (status.fix_) {
-                if (gattReceivedDistance == 0xFFFF) {
+                if (rta::globalReceivedDistance.load(
+                        std::memory_order_relaxed) == 0xFFFF) {
                     std::print(
                         "\r[FIX OK] Sat: {:2d} | Speed: {:6.2f} km/h | Dist: "
                         "--- | "
@@ -125,20 +131,25 @@ void processAndDisplayTask(void* pvParameters) {
                         "{:6.2f}m | "
                         "L: {:9.6f}, {:9.6f}   ",
                         status.satellites_, status.speedKmh_,
-                        static_cast<float>(gattReceivedDistance) / 1000.0F,
+                        static_cast<float>(rta::globalReceivedDistance.load(
+                            std::memory_order_relaxed)) /
+                            1000.0F,
                         status.latitude_, status.longitude_);
                 }
             } else {
-                if (gattReceivedDistance == 0xFFFF) {
+                if (rta::globalReceivedDistance.load(
+                        std::memory_order_relaxed) == 0xFFFF) {
                     std::print(
                         "\r[WAITING] Dist: --- | No fix data parsed yet... "
                         "         ");
                 } else {
-                    std::print("\r[WAITING] Dist: {:6.2f}m | No fix data "
-                               "parsed yet... "
-                               "         ",
-                               static_cast<float>(gattReceivedDistance) /
-                                   1000.0F);
+                    std::print(
+                        "\r[WAITING] Dist: {:6.2f}m | No fix data "
+                        "parsed yet... "
+                        "         ",
+                        static_cast<float>(rta::globalReceivedDistance.load(
+                            std::memory_order_relaxed)) /
+                            1000.0F);
                 }
             }
             (void)std::fflush(stdout);

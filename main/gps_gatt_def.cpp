@@ -12,7 +12,6 @@
 extern "C" {
 
 uint16_t gattSvrChrSpdValHandle;
-uint16_t gattReceivedDistance = 0xFFFF;
 
 static const ble_uuid128_t GATT_SVR_SVC_UUID =
     BLE_UUID128_INIT(0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad,

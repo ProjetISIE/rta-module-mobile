@@ -1,4 +1,5 @@
 #include "LoggerService.hpp"
+#include "DistanceData.hpp"
 #include "GpsService.hpp"
 #include "driver/uart.h"
 #include "esp_log.h"
@@ -16,8 +17,6 @@
 #include <string_view>
 #include <sys/stat.h>
 #include <unistd.h>
-
-extern "C" uint16_t gattReceivedDistance;
 
 namespace rta {
 
@@ -130,8 +129,10 @@ void LoggerService::loggerTask(void* arg) {
 
         // Get BLE distance
         std::optional<double> distVal;
-        if (gattReceivedDistance != 0xFFFF) {
-            distVal = static_cast<double>(gattReceivedDistance) / 1000.0;
+        const uint16_t dist =
+            rta::globalReceivedDistance.load(std::memory_order_relaxed);
+        if (dist != 0xFFFF) {
+            distVal = static_cast<double>(dist) / 1000.0;
         }
 
         self->writeRecord(status, distVal);

@@ -1,4 +1,5 @@
 #include "EspNowMobile.hpp"
+#include "DistanceData.hpp"
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_mac.h"
@@ -7,8 +8,6 @@
 #include "esp_timer.h"
 #include "esp_wifi.h"
 #include <atomic>
-
-extern "C" uint16_t gattReceivedDistance;
 
 namespace rta {
 namespace espnow {
@@ -30,7 +29,8 @@ static void recv_cb(const esp_now_recv_info_t* esp_now_info,
             reinterpret_cast<const EspNowDistancePacket*>(data);
         if (pkt->magic[0] == 'R' && pkt->magic[1] == 'T' &&
             pkt->magic[2] == 'A' && pkt->magic[3] == '!') {
-            gattReceivedDistance = pkt->distance_mm;
+            rta::globalReceivedDistance.store(pkt->distance_mm,
+                                              std::memory_order_relaxed);
             lastPacketTimeUs.store(esp_timer_get_time());
         }
     }

@@ -47,9 +47,6 @@ class BleManager {
     uint16_t fixedDistSvcStartHandle_{0};
     uint16_t fixedDistSvcEndHandle_{0};
     uint16_t fixedDistChrValHandle_{0};
-
-    // Static pointer for NimBLE callbacks
-    static BleManager* instance;
 };
 
 } // namespace rta
