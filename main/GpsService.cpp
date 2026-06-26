@@ -35,40 +35,45 @@ constexpr std::string_view kPmtkSetNmeaOutputRmcgga =
     "$PMTK314,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0*28\r\n";
 constexpr std::string_view kPmtkSetNmeaUpdate5Hz = "$PMTK220,200*2C\r\n";
 
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
-    using namespace std::numbers;
+    using std::numbers::pi;
     const auto deltaLat = (lat2 - lat1) * pi / 180.0;
     const auto deltaLon = (lon2 - lon1) * pi / 180.0;
     const auto lat1Rad = lat1 * pi / 180.0;
     const auto lat2Rad = lat2 * pi / 180.0;
     const auto arc = std::pow(std::sin(deltaLat / 2), 2) +
-                     std::pow(std::sin(deltaLon / 2), 2) * std::cos(lat1Rad) *
-                         std::cos(lat2Rad);
+                     (std::pow(std::sin(deltaLon / 2), 2) * std::cos(lat1Rad) *
+                      std::cos(lat2Rad));
     const auto centralAngle = 2 * std::asin(std::sqrt(arc));
     return kEarthRadiusKm * centralAngle;
 }
 
 double convertPositionToDecimal(nmea_position pos) {
-    auto decimalDegrees = pos.degrees + (pos.minutes / 60.0);
+    auto decimalDegrees =
+        pos.degrees +
+        (pos.minutes / 60.0); // NOLINT(cppcoreguidelines-avoid-magic-numbers)
     if (pos.cardinal == 'S' || pos.cardinal == 'W') {
         decimalDegrees = -decimalDegrees;
     }
     return decimalDegrees;
 }
 
-uint32_t utc_tm_to_epoch(const struct tm& t) {
-    int year = t.tm_year + 1900;
-    int month = t.tm_mon + 1; // 1-12
+// NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers)
+uint32_t utcTmToEpoch(const struct tm& timeStruct) {
+    int year = timeStruct.tm_year + 1900;
+    int month = timeStruct.tm_mon + 1; // 1-12
     if (month <= 2) {
         year -= 1;
         month += 12;
     }
-    int days = 365 * year + year / 4 - year / 100 + year / 400 +
-               367 * month / 12 - 30 + t.tm_mday - 719499;
+    const int days = 365 * year + year / 4 - year / 100 + year / 400 +
+                     367 * month / 12 - 30 + timeStruct.tm_mday - 719499;
 
-    return static_cast<uint32_t>(days * 86400 + t.tm_hour * 3600 +
-                                 t.tm_min * 60 + t.tm_sec);
+    return static_cast<uint32_t>(days * 86400 + timeStruct.tm_hour * 3600 +
+                                 timeStruct.tm_min * 60 + timeStruct.tm_sec);
 }
+// NOLINTEND(cppcoreguidelines-avoid-magic-numbers)
 } // namespace
 
 extern "C" uint16_t gattSvrChrSpdValHandle;
@@ -98,7 +103,7 @@ void GpsService::processNmeaSentence(std::string_view sentence) {
                 status_.latitude_ = convertPositionToDecimal(rmc->latitude);
                 status_.longitude_ = convertPositionToDecimal(rmc->longitude);
                 status_.speedKmh_ = rmc->gndspd_knots * 1.852F;
-                status_.utcEpoch_ = utc_tm_to_epoch(rmc->date_time);
+                status_.utcEpoch_ = utcTmToEpoch(rmc->date_time);
 
                 if (firstFix_) {
                     lastLat_ = status_.latitude_;

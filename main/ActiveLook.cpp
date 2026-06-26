@@ -11,8 +11,8 @@
 namespace rta {
 
 namespace {
-constexpr uint8_t kLumaTextConfigDefault[] = {0x00, 0x99, 0x00, 0x60,
-                                              0x04, 0x02, 0x0F};
+constexpr std::array<uint8_t, 7> kLumaTextConfigDefault = {
+    0x00, 0x99, 0x00, 0x60, 0x04, 0x02, 0x0F};
 constexpr uint8_t kYPosSpeed = 0x40;
 constexpr uint8_t kYPosDistance = 0x80;
 } // namespace
@@ -28,6 +28,7 @@ void ActiveLook::sendCommand(Command cmd, std::span<const uint8_t> payload) {
     std::vector<uint8_t> buf;
     buf.reserve(totalLen);
 
+    // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers)
     buf.push_back(0xFF);
     buf.push_back(static_cast<uint8_t>(cmd));
     buf.push_back(static_cast<uint8_t>(static_cast<uint32_t>(totalLen) >> 8));
@@ -37,6 +38,7 @@ void ActiveLook::sendCommand(Command cmd, std::span<const uint8_t> payload) {
         buf.insert(buf.end(), payload.begin(), payload.end());
     }
     buf.push_back(0xAA);
+    // NOLINTEND(cppcoreguidelines-avoid-magic-numbers)
 
     for (const uint16_t handle : kCommandHandles) {
         ble_gattc_write_no_rsp_flat(*connectionHandle_, handle, buf.data(),
@@ -67,7 +69,7 @@ void ActiveLook::displayText(std::string_view msg) {
 
     // LumaText config: {X, Y, Rotation, Font, Color}
     std::vector<uint8_t> txt;
-    txt.reserve(sizeof(kLumaTextConfigDefault) + msg.length() + 1);
+    txt.reserve(kLumaTextConfigDefault.size() + msg.length() + 1);
     txt.insert(txt.end(), std::begin(kLumaTextConfigDefault),
                std::end(kLumaTextConfigDefault));
 
@@ -87,6 +89,7 @@ void ActiveLook::displayNumber(int value) {
 
 void ActiveLook::displayGpsWait() { displayText("Wait..."); }
 
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 void ActiveLook::displaySpeedAndDistance(std::optional<double> speedKmh,
                                          std::optional<double> distanceM) {
     if (!connectionHandle_) {
@@ -118,8 +121,10 @@ void ActiveLook::displaySpeedAndDistance(std::optional<double> speedKmh,
     };
 
     auto buildPayload = [](const std::string& formatted, uint8_t yPos) {
-        std::vector<uint8_t> payload = {0x00, 0x99, 0x00, yPos,
-                                        0x04, 0x02, 0x0F};
+        std::vector<uint8_t> payload = {
+            0x00, 0x99, 0x00,
+            yPos,              // NOLINT(cppcoreguidelines-avoid-magic-numbers)
+            0x04, 0x02, 0x0F}; // NOLINT(cppcoreguidelines-avoid-magic-numbers)
         payload.reserve(payload.size() + formatted.length() + 1);
 
         for (const char character : formatted) {

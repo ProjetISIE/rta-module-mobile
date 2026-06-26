@@ -25,6 +25,11 @@ Checks: >
   -misc-include-cleaner,
   -clang-diagnostic-error
 
+ExtraArgs:
+  - "-Wno-unknown-warning-option"
+  - "-Wno-unknown-attributes"
+  - "-Wno-unknown-argument"
+
 # Industry standard: Treat warnings as errors
 WarningsAsErrors: "*"
 

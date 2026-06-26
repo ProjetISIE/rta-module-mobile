@@ -1,13 +1,14 @@
-#pragma once
-#include <cstdint>
+#ifndef RTA_ESPNOW_MOBILE_HPP
+#define RTA_ESPNOW_MOBILE_HPP
 
+#include <cstdint>
 #include <atomic>
 
-namespace rta {
-namespace espnow {
+namespace rta::espnow {
 
 void init(std::atomic<uint16_t>& distanceRef);
 bool isActive();
 
-} // namespace espnow
-} // namespace rta
+} // namespace rta::espnow
+
+#endif // RTA_ESPNOW_MOBILE_HPP
