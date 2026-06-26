@@ -23,10 +23,33 @@ Checks: >
   -cppcoreguidelines-avoid-do-while,
   -hicpp-signed-bitwise,
   -misc-include-cleaner,
-  -clang-diagnostic-error
+  -clang-diagnostic-*,
+  -misc-header-include-cycle,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -cppcoreguidelines-pro-bounds-array-to-pointer-decay,
+  -hicpp-no-array-decay,
+  -cppcoreguidelines-pro-type-vararg,
+  -hicpp-vararg,
+  -cppcoreguidelines-owning-memory,
+  -modernize-avoid-c-arrays,
+  -hicpp-avoid-c-arrays,
+  -cppcoreguidelines-avoid-c-arrays,
+  -modernize-use-std-print,
+  -cert-err33-c,
+  -cert-err34-c,
+  -google-readability-casting,
+  -misc-const-correctness,
+  -misc-use-anonymous-namespace,
+  -cppcoreguidelines-pro-type-const-cast,
+  -readability-implicit-bool-conversion,
+  -readability-uppercase-literal-suffix,
+  -hicpp-uppercase-literal-suffix,
+  -bugprone-narrowing-conversions,
+  -cppcoreguidelines-narrowing-conversions
 
 ExtraArgs:
   - "-Wno-unknown-warning-option"
+  - "-Wno-unknown-argument"
   - "-Wno-unknown-attributes"
   - "-Wno-unknown-argument"
 

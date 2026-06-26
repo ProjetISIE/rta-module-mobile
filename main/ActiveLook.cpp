@@ -121,10 +121,10 @@ void ActiveLook::displaySpeedAndDistance(std::optional<double> speedKmh,
     };
 
     auto buildPayload = [](const std::string& formatted, uint8_t yPos) {
-        std::vector<uint8_t> payload = {
-            0x00, 0x99, 0x00,
-            yPos,              // NOLINT(cppcoreguidelines-avoid-magic-numbers)
-            0x04, 0x02, 0x0F}; // NOLINT(cppcoreguidelines-avoid-magic-numbers)
+        // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers)
+        std::vector<uint8_t> payload = {0x00, 0x99, 0x00, yPos,
+                                        0x04, 0x02, 0x0F};
+        // NOLINTEND(cppcoreguidelines-avoid-magic-numbers)
         payload.reserve(payload.size() + formatted.length() + 1);
 
         for (const char character : formatted) {

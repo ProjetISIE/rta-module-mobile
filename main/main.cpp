@@ -20,9 +20,7 @@ constexpr const char* kTag = "RTA";
 
 class AppContext {
   public:
-    AppContext()
-        : server_("RTA_MOBILE"), manager_(glasses_, distance_),
-          logger_(gps_, distance_) {}
+    AppContext() = default;
 
     rta::ActiveLook& glasses() { return glasses_; }
     rta::BleServer& server() { return server_; }
@@ -35,9 +33,9 @@ class AppContext {
     std::atomic<uint16_t> distance_{0xFFFF};
     rta::GpsService gps_;
     rta::ActiveLook glasses_;
-    rta::BleServer server_;
-    rta::BleManager manager_;
-    rta::LoggerService logger_;
+    rta::BleServer server_{"RTA_MOBILE"};
+    rta::BleManager manager_{glasses_, distance_};
+    rta::LoggerService logger_{gps_, distance_};
 };
 
 constexpr uint16_t kInvalidDistance = 0xFFFF;
@@ -45,7 +43,7 @@ constexpr uint16_t kInvalidDistance = 0xFFFF;
 struct DisplayState {
     bool wasConnected_{false};
     bool lastFix_{false};
-    float lastSpeedKmh_{0.0f};
+    float lastSpeedKmh_{0.0F};
     uint16_t lastDistance_{kInvalidDistance};
     bool forceUpdate_{false};
     int rtaOkTimer_{0};
@@ -53,7 +51,7 @@ struct DisplayState {
 
 // GATT services defined in gps_gatt_def.cpp
 extern "C" struct ble_gatt_svc_def gpsGattSvcs[];
-extern "C" void set_gatt_gps_service(rta::GpsService* gps);
+extern "C" void setGattGpsService(rta::GpsService* gps);
 
 void updateGlassesDisplay(AppContext& context, const rta::GpsStatus& status,
                           DisplayState& state) {
@@ -93,7 +91,7 @@ void updateGlassesDisplay(AppContext& context, const rta::GpsStatus& status,
                 context.glasses().displaySpeedAndDistance(speedVal, distVal);
 
                 state.lastFix_ = status.fix_;
-                state.lastSpeedKmh_ = status.fix_ ? status.speedKmh_ : 0.0f;
+                state.lastSpeedKmh_ = status.fix_ ? status.speedKmh_ : 0.0F;
                 state.lastDistance_ =
                     context.distance().load(std::memory_order_relaxed);
                 state.forceUpdate_ = false;
@@ -103,7 +101,7 @@ void updateGlassesDisplay(AppContext& context, const rta::GpsStatus& status,
         state.wasConnected_ = false;
         state.rtaOkTimer_ = 0;
         state.lastFix_ = false;
-        state.lastSpeedKmh_ = 0.0f;
+        state.lastSpeedKmh_ = 0.0F;
         state.lastDistance_ = kInvalidDistance;
         state.forceUpdate_ = false;
     }
@@ -205,7 +203,7 @@ extern "C" void app_main() {
     context->logger().startConsoleReader();
 
     // Register services and start BLE stack
-    set_gatt_gps_service(&context->gps());
+    setGattGpsService(&context->gps());
     if (context->server().registerServices(gpsGattSvcs) != 0) {
         ESP_LOGE(kTag, "Failed to register BLE services");
         return;

@@ -13,7 +13,9 @@ namespace rta {
 
 namespace {
 constexpr std::string_view kTag = "RTA_BLE_MANAGER";
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 bool connectionPending = false;
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 bool connectingToGlasses = false;
 
 const ble_uuid128_t kFixedSvcUuid =

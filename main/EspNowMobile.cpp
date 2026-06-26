@@ -13,7 +13,9 @@ namespace rta::espnow {
 
 namespace {
 constexpr const char* kTag = "ESP_NOW_MOBILE";
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 std::atomic<int64_t> lastPacketTimeUs{0};
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 std::atomic<uint16_t>* sDistanceRef = nullptr;
 } // namespace
 
@@ -29,7 +31,7 @@ namespace {
 void recvCb([[maybe_unused]] const esp_now_recv_info_t* espNowInfo,
             const uint8_t* data, int len) {
     if (len == sizeof(EspNowDistancePacket)) {
-        auto* pkt = reinterpret_cast<const EspNowDistancePacket*>(data);
+        const auto* pkt = reinterpret_cast<const EspNowDistancePacket*>(data);
         if (pkt->magic_[0] == 'R' && pkt->magic_[1] == 'T' &&
             pkt->magic_[2] == 'A' && pkt->magic_[3] == '!') {
             if (sDistanceRef != nullptr) {
@@ -53,7 +55,7 @@ bool isActive() {
 
 void init(std::atomic<uint16_t>& distanceRef) {
     sDistanceRef = &distanceRef;
-    // NOLINTBEGIN(cppcoreguidelines-pro-type-vararg,misc-const-correctness)
+    // NOLINTBEGIN(cppcoreguidelines-pro-type-vararg,misc-const-correctness,hicpp-vararg)
     ESP_LOGI(kTag, "Initializing ESP-NOW (Mobile)...");
 
     esp_err_t err = esp_netif_init();
@@ -79,7 +81,7 @@ void init(std::atomic<uint16_t>& distanceRef) {
     ESP_ERROR_CHECK(esp_now_register_recv_cb(recvCb));
 
     ESP_LOGI(kTag, "ESP-NOW mobile initialized and listening");
-    // NOLINTEND(cppcoreguidelines-pro-type-vararg,misc-const-correctness)
+    // NOLINTEND(cppcoreguidelines-pro-type-vararg,misc-const-correctness,hicpp-vararg)
 }
 
 } // namespace rta::espnow
