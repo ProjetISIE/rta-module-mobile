@@ -45,7 +45,9 @@ Checks: >
   -readability-uppercase-literal-suffix,
   -hicpp-uppercase-literal-suffix,
   -bugprone-narrowing-conversions,
-  -cppcoreguidelines-narrowing-conversions
+  -cppcoreguidelines-narrowing-conversions,
+  -cppcoreguidelines-non-private-member-variables-in-classes,
+  -misc-non-private-member-variables-in-classes
 
 ExtraArgs:
   - "-Wno-unknown-warning-option"

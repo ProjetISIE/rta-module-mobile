@@ -77,7 +77,6 @@ void handleDiscovery(struct ble_gap_event* event, BleManager* manager) {
             }
 
             struct ble_gap_conn_params connParams{};
-            // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers)
             connParams.scan_itvl = 16;
             connParams.scan_window = 16;
             connParams.itvl_min = 24;
@@ -87,7 +86,6 @@ void handleDiscovery(struct ble_gap_event* event, BleManager* manager) {
             returnCode = ble_gap_connect(ownAddrType, &event->disc.addr, 30000,
                                          &connParams,
                                          BleManager::gapEventCallback, manager);
-            // NOLINTEND(cppcoreguidelines-avoid-magic-numbers)
             if (returnCode != 0) {
                 if (returnCode != BLE_HS_EALREADY) {
                     ESP_LOGE(kTag.data(), "Error connecting; rc=%d",

@@ -22,7 +22,6 @@ std::atomic<uint16_t>* sDistanceRef = nullptr;
 #pragma pack(push, 1)
 struct EspNowDistancePacket {
     uint8_t magic_[4]; // NOLINT(modernize-avoid-c-arrays, hicpp-avoid-c-arrays,
-                       // cppcoreguidelines-avoid-c-arrays)
     uint16_t distanceMm_;
 };
 #pragma pack(pop)
@@ -49,13 +48,11 @@ bool isActive() {
     if (last == 0) {
         return false;
     }
-    return (esp_timer_get_time() - last) <
-           5000000; // NOLINT(cppcoreguidelines-avoid-magic-numbers)
+    return (esp_timer_get_time() - last) < 5000000;
 }
 
 void init(std::atomic<uint16_t>& distanceRef) {
     sDistanceRef = &distanceRef;
-    // NOLINTBEGIN(cppcoreguidelines-pro-type-vararg,misc-const-correctness,hicpp-vararg)
     ESP_LOGI(kTag, "Initializing ESP-NOW (Mobile)...");
 
     esp_err_t err = esp_netif_init();
@@ -81,7 +78,6 @@ void init(std::atomic<uint16_t>& distanceRef) {
     ESP_ERROR_CHECK(esp_now_register_recv_cb(recvCb));
 
     ESP_LOGI(kTag, "ESP-NOW mobile initialized and listening");
-    // NOLINTEND(cppcoreguidelines-pro-type-vararg,misc-const-correctness,hicpp-vararg)
 }
 
 } // namespace rta::espnow

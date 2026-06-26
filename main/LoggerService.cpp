@@ -49,11 +49,10 @@ void LoggerService::start() {
 
     // 2. Initialize SPIFFS
     ESP_LOGI(kTag.data(), "Initializing SPIFFS...");
-    const esp_vfs_spiffs_conf_t conf = {
-        .base_path = "/spiffs",
-        .partition_label = "storage",
-        .max_files = 10, // NOLINT(cppcoreguidelines-avoid-magic-numbers)
-        .format_if_mount_failed = true};
+    const esp_vfs_spiffs_conf_t conf = {.base_path = "/spiffs",
+                                        .partition_label = "storage",
+                                        .max_files = 10,
+                                        .format_if_mount_failed = true};
     const esp_err_t ret = esp_vfs_spiffs_register(&conf);
     if (ret != ESP_OK) {
         ESP_LOGE(kTag.data(), "Failed to mount SPIFFS (%s)",
@@ -67,8 +66,6 @@ void LoggerService::start() {
     if (dir != nullptr) {
         struct dirent* ent = nullptr;
         while ((ent = readdir(dir)) != nullptr) {
-            // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-array-to-pointer-decay,
-            // hicpp-no-array-decay, cppcoreguidelines-avoid-magic-numbers)
             if (strncmp(ent->d_name, "session_", 8) == 0) {
                 filesToDelete.push_back(ent->d_name);
             }
@@ -77,12 +74,7 @@ void LoggerService::start() {
     }
 
     for (const auto& fName : filesToDelete) {
-        char filepath[300]; // NOLINT(modernize-avoid-c-arrays,
-                            // hicpp-avoid-c-arrays,
-                            // cppcoreguidelines-avoid-c-arrays)
-        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-vararg, hicpp-vararg,
-        // cppcoreguidelines-pro-bounds-array-to-pointer-decay,
-        // hicpp-no-array-decay)
+        char filepath[300];
         snprintf(filepath, sizeof(filepath), "/spiffs/%s", fName.c_str());
         unlink(filepath);
         ESP_LOGI(kTag.data(), "Deleted legacy file: %s", filepath);
@@ -99,25 +91,17 @@ void LoggerService::start() {
 
     // 5. Free up space and open new active file
     freeUpSpaceIfNeeded();
-    char filename[32]; // NOLINT
-    // NOLINTNEXTLINE(cert-err33-c, cppcoreguidelines-pro-type-vararg,
-    // hicpp-vararg, cppcoreguidelines-pro-bounds-array-to-pointer-decay,
-    // hicpp-no-array-decay, google-readability-casting)
+    char filename[32];
     snprintf(filename, sizeof(filename), "/spiffs/log_v2_%lu.bin",
              (unsigned long)activeFileIdx_);
-    // NOLINTNEXTLINE(cppcoreguidelines-owning-memory,
-    // cppcoreguidelines-pro-bounds-array-to-pointer-decay,
-    // hicpp-no-array-decay, readability-identifier-length)
     FILE* file = fopen(filename, "wb");
     if (file != nullptr) {
-        // NOLINTNEXTLINE(cert-err33-c, cppcoreguidelines-owning-memory)
         fclose(file);
     }
 
     isLoggingActive_ = true;
 
     // 5. Start logging task
-    // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
     xTaskCreate(loggerTask, "logger_task", 4096, this, 3, nullptr);
 
     ESP_LOGI(kTag.data(),
@@ -126,7 +110,6 @@ void LoggerService::start() {
 }
 
 void LoggerService::startConsoleReader() {
-    // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
     xTaskCreate(consoleTask, "console_task", 4096, this, 2, nullptr);
     ESP_LOGI(kTag.data(), "Console command reader started.");
 }
@@ -146,9 +129,7 @@ void LoggerService::loggerTask(void* arg) {
         std::optional<double> distVal;
         const uint16_t dist =
             self->distanceRef_.load(std::memory_order_relaxed);
-        // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
         if (dist != 0xFFFF) {
-            // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
             distVal = static_cast<double>(dist) / 1000.0;
         }
 
@@ -163,21 +144,17 @@ void LoggerService::consoleTask(void* arg) {
     // Install UART driver on UART0 if not already installed.
     // If a driver is already installed, this will fail safely or do nothing.
     uart_config_t uartConfig = {};
-    uartConfig.baud_rate =
-        115200; // NOLINT(cppcoreguidelines-avoid-magic-numbers)
+    uartConfig.baud_rate = 115200;
     uartConfig.data_bits = UART_DATA_8_BITS;
     uartConfig.parity = UART_PARITY_DISABLE;
     uartConfig.stop_bits = UART_STOP_BITS_1;
     uartConfig.flow_ctrl = UART_HW_FLOWCTRL_DISABLE;
     uartConfig.rx_flow_ctrl_thresh = 0;
     uartConfig.source_clk = UART_SCLK_DEFAULT;
-    // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
     uart_driver_install(UART_NUM_0, 256, 256, 0, nullptr, 0);
     uart_param_config(UART_NUM_0, &uartConfig);
 
-    char line[64]; // NOLINT(modernize-avoid-c-arrays, hicpp-avoid-c-arrays,
-                   // cppcoreguidelines-avoid-c-arrays,
-                   // cppcoreguidelines-avoid-magic-numbers)
+    char line[64];
     int lineLen = 0;
 
     while (true) {
@@ -190,11 +167,7 @@ void LoggerService::consoleTask(void* arg) {
 
             if (byte == '\r' || byte == '\n') {
                 // Echo carriage return and newline
-                // NOLINTNEXTLINE(modernize-avoid-c-arrays,
-                // hicpp-avoid-c-arrays, cppcoreguidelines-avoid-c-arrays)
                 const char nlSeq[] = {'\r', '\n'};
-                // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-array-to-pointer-decay,
-                // hicpp-no-array-decay)
                 uart_write_bytes(UART_NUM_0, nlSeq, sizeof(nlSeq));
 
                 // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
@@ -209,35 +182,21 @@ void LoggerService::consoleTask(void* arg) {
                     if (cmd.find("DUMP") != std::string::npos) {
                         self->dumpLogs();
                     } else {
-                        // NOLINTNEXTLINE(modernize-use-std-print, hicpp-vararg,
-                        // cppcoreguidelines-pro-type-vararg,
-                        // google-readability-casting)
                         printf("\n[DEBUG] Ignored command: '%s' (len: %d)\n",
                                cmd.c_str(), static_cast<int>(cmd.length()));
                         for (size_t i = 0; i < cmd.length(); i++) {
-                            // NOLINTNEXTLINE(modernize-use-std-print,
-                            // hicpp-vararg, cppcoreguidelines-pro-type-vararg)
                             printf("%02X ", static_cast<uint8_t>(cmd[i]));
                         }
-                        // NOLINTNEXTLINE(modernize-use-std-print, hicpp-vararg,
-                        // cppcoreguidelines-pro-type-vararg)
                         printf("\n");
                     }
                 }
                 lineLen = 0;
             } else if (lineLen < static_cast<int>(sizeof(line)) - 1) {
-                // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
                 if (byte == 8 || byte == 127) {
                     if (lineLen > 0) {
                         lineLen--;
                         // Erase character from user terminal
-                        // NOLINTNEXTLINE(modernize-avoid-c-arrays,
-                        // hicpp-avoid-c-arrays,
-                        // cppcoreguidelines-avoid-c-arrays,
-                        // cppcoreguidelines-avoid-magic-numbers)
                         const char bsSeq[] = {8, ' ', 8};
-                        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-array-to-pointer-decay,
-                        // hicpp-no-array-decay)
                         uart_write_bytes(UART_NUM_0, bsSeq, sizeof(bsSeq));
                     }
                 } else {
@@ -257,14 +216,9 @@ void LoggerService::writeRecord(const GpsStatus& status,
 
     checkAndRotateFile();
 
-    char filename[32]; // NOLINT
-    // NOLINTNEXTLINE(cert-err33-c, cppcoreguidelines-pro-type-vararg,
-    // hicpp-vararg, cppcoreguidelines-pro-bounds-array-to-pointer-decay,
-    // hicpp-no-array-decay, google-readability-casting)
+    char filename[32];
     snprintf(filename, sizeof(filename), "/spiffs/log_v2_%lu.bin",
              (unsigned long)activeFileIdx_);
-    // NOLINTNEXTLINE(cppcoreguidelines-owning-memory,
-    // cppcoreguidelines-pro-bounds-array-to-pointer-decay,
     // hicpp-no-array-decay, readability-identifier-length)
     FILE* file = fopen(filename, "ab");
     if (file == nullptr) {
@@ -272,23 +226,18 @@ void LoggerService::writeRecord(const GpsStatus& status,
     }
 
     LogRecord record{};
-    // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
     record.timestampMs_ = static_cast<uint32_t>(esp_timer_get_time() / 1000);
     record.utcEpochS_ = status.utcEpoch_;
     record.speedKmh_ = status.fix_
                            ? status.speedKmh_
                            : 0.0F; // NOLINT(readability-redundant-casting)
     if (distance.has_value()) {
-        // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
         record.distanceMm_ = static_cast<uint16_t>(*distance * 1000.0);
     } else {
-        // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
         record.distanceMm_ = 0xFFFF;
     }
 
-    // NOLINTNEXTLINE(cert-err33-c)
     fwrite(&record, sizeof(LogRecord), 1, file);
-    // NOLINTNEXTLINE(cert-err33-c, cppcoreguidelines-owning-memory)
     fclose(file);
 
     linesWritten_++;
@@ -296,25 +245,18 @@ void LoggerService::writeRecord(const GpsStatus& status,
 
 void LoggerService::checkAndRotateFile() {
     // 18000 lines is 30 minutes of logging at 10 Hz
-    // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
     if (linesWritten_ >= 18000) {
         activeFileIdx_++;
         linesWritten_ = 0;
 
         freeUpSpaceIfNeeded();
 
-        char filename[32]; // NOLINT
-        // NOLINTNEXTLINE(cert-err33-c, cppcoreguidelines-pro-type-vararg,
-        // hicpp-vararg, cppcoreguidelines-pro-bounds-array-to-pointer-decay,
-        // hicpp-no-array-decay, google-readability-casting)
+        char filename[32];
         snprintf(filename, sizeof(filename), "/spiffs/log_v2_%lu.bin",
                  (unsigned long)activeFileIdx_);
-        // NOLINTNEXTLINE(cppcoreguidelines-owning-memory,
-        // cppcoreguidelines-pro-bounds-array-to-pointer-decay,
         // hicpp-no-array-decay, readability-identifier-length)
         FILE* file = fopen(filename, "wb");
         if (file != nullptr) {
-            // NOLINTNEXTLINE(cert-err33-c, cppcoreguidelines-owning-memory)
             fclose(file);
         }
         ESP_LOGI(kTag.data(), "Session rotated. Active file: %s", filename);
@@ -329,10 +271,6 @@ std::vector<uint32_t> LoggerService::getSessionFiles() {
         struct dirent* ent = nullptr;
         while ((ent = readdir(dir)) != nullptr) {
             uint64_t idxUl = 0;
-            // NOLINTNEXTLINE(cert-err34-c, cppcoreguidelines-pro-type-vararg,
-            // hicpp-vararg,
-            // cppcoreguidelines-pro-bounds-array-to-pointer-decay,
-            // hicpp-no-array-decay)
             if (sscanf(ent->d_name, "log_v2_%llu.bin", &idxUl) == 1) {
                 indices.push_back(static_cast<uint32_t>(idxUl));
             }
@@ -351,17 +289,13 @@ void LoggerService::freeUpSpaceIfNeeded() {
         return;
     }
     // Maintain at least 300KB free
-    // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
     while (total > 300000 && (total - used) < 300000) {
         auto files = getSessionFiles();
         if (files.empty()) {
             break;
         }
 
-        char filepath[64]; // NOLINT
-        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-vararg, hicpp-vararg,
-        // cppcoreguidelines-pro-bounds-array-to-pointer-decay,
-        // hicpp-no-array-decay, google-readability-casting)
+        char filepath[64];
         snprintf(filepath, sizeof(filepath), "/spiffs/log_v2_%lu.bin",
                  (unsigned long)files.front());
         unlink(filepath);
@@ -390,7 +324,6 @@ void LoggerService::dumpLogs() {
         if (file != nullptr) {
             LogRecord record{};
             int lineCount = 0;
-            // NOLINTNEXTLINE(cert-err33-c)
             while (fread(&record, sizeof(LogRecord), 1, file) == 1) {
                 if (record.distanceMm_ != 0xFFFF) {
                     printf("%lu,%lu,%.2f,%.2f\n",
@@ -407,7 +340,6 @@ void LoggerService::dumpLogs() {
                     vTaskDelay(1); // Yield to let Idle Task feed the watchdog
                 }
             }
-            // NOLINTNEXTLINE(cert-err33-c)
             fclose(file);
         }
     };

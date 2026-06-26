@@ -19,17 +19,14 @@ rta::GpsService* sGattGpsService = nullptr;
 
 void setGattGpsService(rta::GpsService* gps) { sGattGpsService = gps; }
 
-// NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
 static const ble_uuid128_t kGattSvrSvcUuid =
     BLE_UUID128_INIT(0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa,
                      0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x00);
 
-// NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
 static const ble_uuid128_t kGattSvrChrSpdUuid =
     BLE_UUID128_INIT(0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa,
                      0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x01);
 
-// NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
 static const ble_uuid16_t kGattSvrDscUuid = BLE_UUID16_INIT(0x2901);
 
 namespace {
@@ -41,8 +38,6 @@ int gattSvrDscAccess(uint16_t connHandle, uint16_t attrHandle,
 } // namespace
 
 // Définition des descripteurs
-// NOLINTNEXTLINE(modernize-avoid-c-arrays, hicpp-avoid-c-arrays,
-// cppcoreguidelines-avoid-c-arrays)
 static struct ble_gatt_dsc_def kGattSvrDscs[] = {
     {.uuid = &kGattSvrDscUuid.u,
      .att_flags = BLE_ATT_F_READ,
@@ -57,8 +52,6 @@ static struct ble_gatt_dsc_def kGattSvrDscs[] = {
 };
 
 // Définition des caractéristiques
-// NOLINTNEXTLINE(modernize-avoid-c-arrays, hicpp-avoid-c-arrays,
-// cppcoreguidelines-avoid-c-arrays)
 static struct ble_gatt_chr_def kGattSvrChrs[] = {
     {.uuid = &kGattSvrChrSpdUuid.u,
      .access_cb = gattSvrChrAccess,
@@ -94,7 +87,6 @@ namespace {
 int gattSvrChrAccess(uint16_t /*connHandle*/, uint16_t /*attrHandle*/,
                      struct ble_gatt_access_ctxt* ctxt, void* /*arg*/) {
     if (ble_uuid_cmp(ctxt->chr->uuid, &kGattSvrChrSpdUuid.u) == 0) {
-        // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
         float speed = 0.0F;
         if (sGattGpsService != nullptr) {
             speed = sGattGpsService->getStatus().speedKmh_;

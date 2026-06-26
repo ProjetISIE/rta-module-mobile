@@ -50,16 +50,13 @@ double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
 }
 
 double convertPositionToDecimal(nmea_position pos) {
-    auto decimalDegrees =
-        pos.degrees +
-        (pos.minutes / 60.0); // NOLINT(cppcoreguidelines-avoid-magic-numbers)
+    auto decimalDegrees = pos.degrees + (pos.minutes / 60.0);
     if (pos.cardinal == 'S' || pos.cardinal == 'W') {
         decimalDegrees = -decimalDegrees;
     }
     return decimalDegrees;
 }
 
-// NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers)
 uint32_t utcTmToEpoch(const struct tm& timeStruct) {
     int year = timeStruct.tm_year + 1900;
     int month = timeStruct.tm_mon + 1; // 1-12
@@ -74,7 +71,6 @@ uint32_t utcTmToEpoch(const struct tm& timeStruct) {
     return static_cast<uint32_t>((days * 86400) + (timeStruct.tm_hour * 3600) +
                                  (timeStruct.tm_min * 60) + timeStruct.tm_sec);
 }
-// NOLINTEND(cppcoreguidelines-avoid-magic-numbers)
 } // namespace
 
 extern "C" uint16_t gattSvrChrSpdValHandle;
@@ -103,7 +99,6 @@ void GpsService::processNmeaSentence(std::string_view sentence) {
                 status_.fix_ = true;
                 status_.latitude_ = convertPositionToDecimal(rmc->latitude);
                 status_.longitude_ = convertPositionToDecimal(rmc->longitude);
-                // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
                 status_.speedKmh_ = rmc->gndspd_knots * 1.852F;
                 status_.utcEpoch_ = utcTmToEpoch(rmc->date_time);
 
@@ -142,8 +137,7 @@ void GpsService::readerTask(void* arg) {
     auto* service = static_cast<GpsService*>(arg);
 
     uart_config_t uartConfig = {};
-    uartConfig.baud_rate =
-        9600; // NOLINT(cppcoreguidelines-avoid-magic-numbers)
+    uartConfig.baud_rate = 9600;
     uartConfig.data_bits = UART_DATA_8_BITS;
     uartConfig.parity = UART_PARITY_DISABLE;
     uartConfig.stop_bits = UART_STOP_BITS_1;
@@ -151,7 +145,6 @@ void GpsService::readerTask(void* arg) {
     uartConfig.rx_flow_ctrl_thresh = 0;
     uartConfig.source_clk = UART_SCLK_DEFAULT;
 
-    // NOLINTBEGIN(misc-const-correctness)
     ESP_ERROR_CHECK(
         uart_driver_install(kGpsUartPort, kUartBufSize * 2, 0, 0, nullptr, 0));
     ESP_ERROR_CHECK(uart_param_config(kGpsUartPort, &uartConfig));
@@ -163,7 +156,6 @@ void GpsService::readerTask(void* arg) {
                      kPmtkSetBaud115200.size());
     vTaskDelay(pdMS_TO_TICKS(100));
     ESP_ERROR_CHECK(uart_set_baudrate(kGpsUartPort, 115200));
-    // NOLINTEND(misc-const-correctness)
 
     uart_write_bytes(kGpsUartPort, kPmtkSetNmeaOutputRmcgga.data(),
                      kPmtkSetNmeaOutputRmcgga.size());
@@ -228,7 +220,6 @@ void GpsService::readerTask(void* arg) {
 }
 
 void GpsService::start() {
-    // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
     xTaskCreate(readerTask, "gps_reader_task", 4096, this, 5, nullptr);
 }
 
