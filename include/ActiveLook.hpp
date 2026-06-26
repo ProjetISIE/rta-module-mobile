@@ -15,7 +15,7 @@ namespace rta {
 class ActiveLook {
   public:
     /// Bluetooth characteristic handles used for commands.
-    static constexpr std::array<uint16_t, 3> commandHandles = {35, 56, 32};
+    static constexpr std::array<uint16_t, 3> kCommandHandles = {35, 56, 32};
     /// ActiveLook protocol constants
     enum class Command : uint8_t {
         POWER = 0x00,

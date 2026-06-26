@@ -38,7 +38,7 @@ void ActiveLook::sendCommand(Command cmd, std::span<const uint8_t> payload) {
     }
     buf.push_back(0xAA);
 
-    for (const uint16_t handle : commandHandles) {
+    for (const uint16_t handle : kCommandHandles) {
         ble_gattc_write_no_rsp_flat(*connectionHandle_, handle, buf.data(),
                                     buf.size());
     }
@@ -48,10 +48,10 @@ void ActiveLook::initializeDisplay(uint16_t connHandle) {
     connectionHandle_ = connHandle;
 
     // Power on and configure display
-    static constexpr uint8_t vOn = 0x01;
-    static constexpr uint8_t vFlip = 0x02;
-    sendCommand(Command::POWER, std::span{&vOn, 1});
-    sendCommand(Command::CONFIG, std::span{&vFlip, 1});
+    static constexpr uint8_t kOn = 0x01;
+    static constexpr uint8_t kFlip = 0x02;
+    sendCommand(Command::POWER, std::span{&kOn, 1});
+    sendCommand(Command::CONFIG, std::span{&kFlip, 1});
 
     vTaskDelay(pdMS_TO_TICKS(50));
     displayText("RTA OK");

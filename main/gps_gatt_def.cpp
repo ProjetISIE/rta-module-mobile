@@ -94,8 +94,8 @@ static int gattSvrChrAccess(uint16_t /*connHandle*/, uint16_t /*attrHandle*/,
 
 static int gattSvrDscAccess(uint16_t /*connHandle*/, uint16_t /*attrHandle*/,
                             struct ble_gatt_access_ctxt* ctxt, void* /*arg*/) {
-    static constexpr std::string_view desc = "Vitesse (km/h)";
-    return os_mbuf_append(ctxt->om, desc.data(), desc.size()) == 0
+    static constexpr std::string_view kDesc = "Vitesse (km/h)";
+    return os_mbuf_append(ctxt->om, kDesc.data(), kDesc.size()) == 0
                ? 0
                : BLE_ATT_ERR_INSUFFICIENT_RES;
 }

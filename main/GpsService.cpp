@@ -18,22 +18,22 @@
 namespace rta {
 
 namespace {
-constexpr std::string_view tag = "RTA_GPS";
-constexpr double earthRadiusKm = 6371.0;
-constexpr double minOdometerAccuracyKm = 0.001;
-constexpr float minSpeedKmhThreshold = 0.5F;
+constexpr std::string_view kTag = "RTA_GPS";
+constexpr double kEarthRadiusKm = 6371.0;
+constexpr double kMinOdometerAccuracyKm = 0.001;
+constexpr float kMinSpeedKmhThreshold = 0.5F;
 
 // UART Config
-constexpr uart_port_t gpsUartPort = UART_NUM_2;
-constexpr int gpsRxPin = 16;
-constexpr int gpsTxPin = 17;
-constexpr int uartBufSize = 1024;
+constexpr uart_port_t kGpsUartPort = UART_NUM_2;
+constexpr int kGpsRxPin = 16;
+constexpr int kGpsTxPin = 17;
+constexpr int kUartBufSize = 1024;
 
 // PMTK Commands
-constexpr std::string_view pmtkSetBaud115200 = "$PMTK251,115200*1F\r\n";
-constexpr std::string_view pmtkSetNmeaOutputRmcgga =
+constexpr std::string_view kPmtkSetBaud115200 = "$PMTK251,115200*1F\r\n";
+constexpr std::string_view kPmtkSetNmeaOutputRmcgga =
     "$PMTK314,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0*28\r\n";
-constexpr std::string_view pmtkSetNmeaUpdate5Hz = "$PMTK220,200*2C\r\n";
+constexpr std::string_view kPmtkSetNmeaUpdate5Hz = "$PMTK220,200*2C\r\n";
 
 double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
     using namespace std::numbers;
@@ -45,7 +45,7 @@ double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
                      std::pow(std::sin(deltaLon / 2), 2) * std::cos(lat1Rad) *
                          std::cos(lat2Rad);
     const auto centralAngle = 2 * std::asin(std::sqrt(arc));
-    return earthRadiusKm * centralAngle;
+    return kEarthRadiusKm * centralAngle;
 }
 
 double convertPositionToDecimal(nmea_position pos) {
@@ -104,11 +104,11 @@ void GpsService::processNmeaSentence(std::string_view sentence) {
                     lastLat_ = status_.latitude_;
                     lastLon_ = status_.longitude_;
                     firstFix_ = false;
-                } else if (status_.speedKmh_ > minSpeedKmhThreshold) {
+                } else if (status_.speedKmh_ > kMinSpeedKmhThreshold) {
                     const auto distance =
                         calculateDistance(lastLat_, lastLon_, status_.latitude_,
                                           status_.longitude_);
-                    if (distance > minOdometerAccuracyKm) {
+                    if (distance > kMinOdometerAccuracyKm) {
                         status_.odometerKm_ += distance;
                         lastLat_ = status_.latitude_;
                         lastLon_ = status_.longitude_;
@@ -144,29 +144,29 @@ void GpsService::readerTask(void* arg) {
     uartConfig.source_clk = UART_SCLK_DEFAULT;
 
     ESP_ERROR_CHECK(
-        uart_driver_install(gpsUartPort, uartBufSize * 2, 0, 0, nullptr, 0));
-    ESP_ERROR_CHECK(uart_param_config(gpsUartPort, &uartConfig));
-    ESP_ERROR_CHECK(uart_set_pin(gpsUartPort, gpsTxPin, gpsRxPin,
+        uart_driver_install(kGpsUartPort, kUartBufSize * 2, 0, 0, nullptr, 0));
+    ESP_ERROR_CHECK(uart_param_config(kGpsUartPort, &uartConfig));
+    ESP_ERROR_CHECK(uart_set_pin(kGpsUartPort, kGpsTxPin, kGpsRxPin,
                                  UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
 
     vTaskDelay(pdMS_TO_TICKS(100));
-    uart_write_bytes(gpsUartPort, pmtkSetBaud115200.data(),
-                     pmtkSetBaud115200.size());
+    uart_write_bytes(kGpsUartPort, kPmtkSetBaud115200.data(),
+                     kPmtkSetBaud115200.size());
     vTaskDelay(pdMS_TO_TICKS(100));
-    ESP_ERROR_CHECK(uart_set_baudrate(gpsUartPort, 115200));
+    ESP_ERROR_CHECK(uart_set_baudrate(kGpsUartPort, 115200));
 
-    uart_write_bytes(gpsUartPort, pmtkSetNmeaOutputRmcgga.data(),
-                     pmtkSetNmeaOutputRmcgga.size());
+    uart_write_bytes(kGpsUartPort, kPmtkSetNmeaOutputRmcgga.data(),
+                     kPmtkSetNmeaOutputRmcgga.size());
     vTaskDelay(pdMS_TO_TICKS(100));
-    uart_write_bytes(gpsUartPort, pmtkSetNmeaUpdate5Hz.data(),
-                     pmtkSetNmeaUpdate5Hz.size());
+    uart_write_bytes(kGpsUartPort, kPmtkSetNmeaUpdate5Hz.data(),
+                     kPmtkSetNmeaUpdate5Hz.size());
 
-    std::vector<uint8_t> buffer(uartBufSize);
+    std::vector<uint8_t> buffer(kUartBufSize);
     size_t totalBytes = 0;
 
     while (true) {
         const int len =
-            uart_read_bytes(gpsUartPort, buffer.data() + totalBytes,
+            uart_read_bytes(kGpsUartPort, buffer.data() + totalBytes,
                             buffer.size() - totalBytes, pdMS_TO_TICKS(100));
         if (len > 0) {
             totalBytes += static_cast<size_t>(len);

@@ -9,7 +9,7 @@
 namespace rta {
 
 namespace {
-constexpr std::string_view tag = "RTA_BLE_SERVER";
+constexpr std::string_view kTag = "RTA_BLE_SERVER";
 }
 
 BleServer* BleServer::instance = nullptr;
@@ -53,7 +53,7 @@ void BleServer::startAdvertising() {
 
     if (const int returnCode = ble_gap_adv_set_fields(&fields);
         returnCode != 0) {
-        ESP_LOGE(tag.data(), "Error setting adv fields; rc=%d", returnCode);
+        ESP_LOGE(kTag.data(), "Error setting adv fields; rc=%d", returnCode);
         return;
     }
 
@@ -64,22 +64,22 @@ void BleServer::startAdvertising() {
             ble_gap_adv_start(BLE_OWN_ADDR_PUBLIC, nullptr, BLE_HS_FOREVER,
                               &adv_params, BleServer::gapEventCallback, this);
         returnCode != 0) {
-        ESP_LOGE(tag.data(), "Error starting advertising; rc=%d", returnCode);
+        ESP_LOGE(kTag.data(), "Error starting advertising; rc=%d", returnCode);
         return;
     }
-    ESP_LOGI(tag.data(), "BLE Advertising started: %s", deviceName_.c_str());
+    ESP_LOGI(kTag.data(), "BLE Advertising started: %s", deviceName_.c_str());
 }
 
 int BleServer::gapEventCallback(struct ble_gap_event* event, void* arg) {
     auto* server = static_cast<BleServer*>(arg);
     switch (event->type) {
     case BLE_GAP_EVENT_CONNECT:
-        ESP_LOGI(tag.data(), "BLE Connection %s",
+        ESP_LOGI(kTag.data(), "BLE Connection %s",
                  event->connect.status == 0 ? "established" : "failed");
         break;
 
     case BLE_GAP_EVENT_DISCONNECT:
-        ESP_LOGI(tag.data(), "BLE Disconnection; reason=%d",
+        ESP_LOGI(kTag.data(), "BLE Disconnection; reason=%d",
                  event->disconnect.reason);
         server->startAdvertising();
         break;
@@ -89,7 +89,7 @@ int BleServer::gapEventCallback(struct ble_gap_event* event, void* arg) {
 }
 
 void BleServer::hostTask(void* arg) {
-    ESP_LOGI(tag.data(), "BLE Host Task started");
+    ESP_LOGI(kTag.data(), "BLE Host Task started");
     nimble_port_run();
     nimble_port_freertos_deinit();
 }

@@ -20,7 +20,7 @@
 namespace rta {
 
 namespace {
-constexpr std::string_view tag = "RTA_LOGGER";
+constexpr std::string_view kTag = "RTA_LOGGER";
 
 #pragma pack(push, 1)
 struct LogRecord {
@@ -48,14 +48,14 @@ void LoggerService::start() {
     ESP_ERROR_CHECK(err);
 
     // 2. Initialize SPIFFS
-    ESP_LOGI(tag.data(), "Initializing SPIFFS...");
+    ESP_LOGI(kTag.data(), "Initializing SPIFFS...");
     esp_vfs_spiffs_conf_t conf = {.base_path = "/spiffs",
                                   .partition_label = "storage",
                                   .max_files = 10,
                                   .format_if_mount_failed = true};
     esp_err_t ret = esp_vfs_spiffs_register(&conf);
     if (ret != ESP_OK) {
-        ESP_LOGE(tag.data(), "Failed to mount SPIFFS (%s)",
+        ESP_LOGE(kTag.data(), "Failed to mount SPIFFS (%s)",
                  esp_err_to_name(ret));
         return;
     }
@@ -77,7 +77,7 @@ void LoggerService::start() {
         char filepath[300];
         snprintf(filepath, sizeof(filepath), "/spiffs/%s", fName.c_str());
         unlink(filepath);
-        ESP_LOGI(tag.data(), "Deleted legacy file: %s", filepath);
+        ESP_LOGI(kTag.data(), "Deleted legacy file: %s", filepath);
     }
 
     // 4. Load active file index dynamically by scanning directory
@@ -104,14 +104,14 @@ void LoggerService::start() {
     // 5. Start logging task
     xTaskCreate(loggerTask, "logger_task", 4096, this, 3, nullptr);
 
-    ESP_LOGI(tag.data(),
+    ESP_LOGI(kTag.data(),
              "Logger service started successfully. Session active file: %s",
              filename);
 }
 
 void LoggerService::startConsoleReader() {
     xTaskCreate(consoleTask, "console_task", 4096, this, 2, nullptr);
-    ESP_LOGI(tag.data(), "Console command reader started.");
+    ESP_LOGI(kTag.data(), "Console command reader started.");
 }
 
 void LoggerService::loggerTask(void* arg) {
@@ -253,7 +253,7 @@ void LoggerService::checkAndRotateFile() {
         if (f != nullptr) {
             fclose(f);
         }
-        ESP_LOGI(tag.data(), "Session rotated. Active file: %s", filename);
+        ESP_LOGI(kTag.data(), "Session rotated. Active file: %s", filename);
     }
 }
 
@@ -288,7 +288,7 @@ void LoggerService::freeUpSpaceIfNeeded() {
         snprintf(filepath, sizeof(filepath), "/spiffs/log_v2_%lu.bin",
                  (unsigned long)files.front());
         unlink(filepath);
-        ESP_LOGI(tag.data(), "Deleted oldest session to free space: %s",
+        ESP_LOGI(kTag.data(), "Deleted oldest session to free space: %s",
                  filepath);
 
         if (esp_spiffs_info("storage", &total, &used) != ESP_OK) {

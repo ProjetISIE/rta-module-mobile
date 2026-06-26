@@ -16,7 +16,7 @@
 #include <print>
 
 namespace {
-constexpr const char* tag = "RTA";
+constexpr const char* kTag = "RTA";
 
 class AppContext {
   public:
@@ -120,8 +120,8 @@ void processAndDisplayTask(void* pvParameters) {
         updateGlassesDisplay(*context, status, state);
 
         if (rta::espnow::isActive() && context->manager().isFixedConnected()) {
-            ESP_LOGI(tag, "ESP-NOW is active. Disconnecting BLE from RTA_FIXE "
-                          "to save resources.");
+            ESP_LOGI(kTag, "ESP-NOW is active. Disconnecting BLE from RTA_FIXE "
+                           "to save resources.");
             context->manager().disconnectFixed();
         }
 
@@ -186,7 +186,7 @@ extern "C" void app_main() {
 
     // Initialisation du serveur BLE
     if (context->server().init() != 0) {
-        ESP_LOGE(tag, "Failed to initialize BLE server");
+        ESP_LOGE(kTag, "Failed to initialize BLE server");
         return;
     }
 
@@ -194,7 +194,7 @@ extern "C" void app_main() {
     context->server().setSyncCallback([]() {
         context->server().startAdvertising();
         context->manager().startScanning();
-        ESP_LOGI(tag, "BLE synchronized: Advertising and Scanning started");
+        ESP_LOGI(kTag, "BLE synchronized: Advertising and Scanning started");
     });
 
     // Start GPS Service
@@ -207,12 +207,12 @@ extern "C" void app_main() {
     // Register services and start BLE stack
     set_gatt_gps_service(&context->gps());
     if (context->server().registerServices(gpsGattSvcs) != 0) {
-        ESP_LOGE(tag, "Failed to register BLE services");
+        ESP_LOGE(kTag, "Failed to register BLE services");
         return;
     }
 
     if (context->server().start() != 0) {
-        ESP_LOGE(tag, "Failed to start BLE stack");
+        ESP_LOGE(kTag, "Failed to start BLE stack");
         return;
     }
 
